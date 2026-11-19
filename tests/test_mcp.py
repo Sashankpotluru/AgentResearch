@@ -59,9 +59,15 @@ def test_official_stdio_client_calls_bounded_structured_tools(tmp_path):
                 ("read_source", {"claim": "x", "source_id": "missing"}),
                 ("search_sources", {"claim": "x" * 10001}),
                 ("audit_run", {"run_id": "not-saved"}),
-                ("investigate", {"claim": "ice", "budget": 9}),
             ]:
                 assert (await session.call_tool(name, args)).is_error
+
+            excess = await session.call_tool(
+                "investigate", {"claim": "ice", "threshold": 800000, "budget": 9}
+            )
+            assert excess.is_error
+            diagnostic = " ".join(block.text for block in excess.content).lower()
+            assert "budget" in diagnostic and "less than or equal to 8" in diagnostic
 
     asyncio.run(exercise())
 
@@ -234,3 +240,23 @@ def test_prospective_mixed_case_database_paths_follow_volume_semantics(
         assert not checkpoint.samefile(cache_path)
         with sqlite3.connect(cache_path) as cache_db:
             assert cache_db.execute("SELECT COUNT(*) FROM scores").fetchone() == (2,)
+
+
+@pytest.mark.parametrize("checkpoint", [":memory:", ""])
+def test_mcp_requires_file_backed_checkpoint(checkpoint, tmp_path, capsys):
+    from agentresearch import cli
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "serve-mcp",
+                "--corpus",
+                str(Path(__file__).parent / "fixtures/core.json"),
+                "--model-dir",
+                str(tmp_path),
+                "--db",
+                checkpoint,
+            ]
+        )
+    assert error.value.code == 2
+    assert "file-backed" in capsys.readouterr().err

@@ -425,23 +425,30 @@ function escapeMd(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 }
-const label = (value) => escapeMd(value.replace(/\s+/gu, " "));
+const label = (value) =>
+  escapeMd(value.replace(/\r\n|[\n\r\u000b\u000c\u0085\u2028\u2029]/gu, " "));
 
 export async function markdown(bundle) {
   const { run, sources, view } = bundle,
     excluded = new Set(view.excluded_source_ids);
   const current = await viewAssessment(run, excluded);
-  const original = run.assessment?.final.verdict ?? run.status;
+  const complete = run.status === "complete";
   const lines = [
     "# Claim investigation",
     "",
     label(run.claim),
     "",
-    "Original verdict: **" + original + "**",
+    complete
+      ? "Original verdict: **" + run.assessment.final.verdict + "**"
+      : "Recorded status: **" + run.status + "**",
     "",
-    "Current audit: **" + current.final.verdict + "**",
+    (complete ? "Current audit: **" : "Provisional audit: **") +
+      current.final.verdict +
+      "**",
     "",
-    "Base verdict on retained sources: " + current.base.verdict,
+    (complete ? "Base verdict" : "Provisional base verdict") +
+      " on retained sources: " +
+      current.base.verdict,
     "",
     "Excluded sources: " + ([...excluded].map(label).join(", ") || "none"),
     "",

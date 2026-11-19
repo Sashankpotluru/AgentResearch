@@ -41,7 +41,7 @@ agentresearch report .artifacts/run.json results/scifact/corpus.jsonl > .artifac
 agentresearch report .artifacts/run.json results/scifact/corpus.jsonl --bundle > .artifacts/bundle.json
 ```
 
-Open the desk and choose **Import run** to inspect the bundle. **Export → Portable JSON** includes the original trace and the sources currently withdrawn. **Export → Markdown report** gives the recorded verdict, current audit, cited excerpts and score triples. The browser's 5 MiB import limit includes the complete source texts referenced by search hits. For larger source collections, audit the original run and corpus locally. [Research desk](https://sashankpotluru.github.io/AgentResearch/)
+Open the desk and choose **Import run** to inspect the bundle. **Export → Portable JSON** includes the original trace and the sources currently withdrawn. **Export → Markdown report** gives the recorded verdict, current audit, cited excerpts and score triples. The browser's 5 MiB import limit includes the complete source texts referenced by search hits. For larger source collections, audit the original run and corpus locally. Local `audit` and `report` read run files up to 64 MiB by default. Set a positive byte limit with `--max-run-bytes` for a larger trace or a tighter memory budget. Portable bundles retain the 5 MiB limit. [Research desk](https://sashankpotluru.github.io/AgentResearch/)
 
 For a bounded search of fresh PubMed abstracts, use the connector and pass the resulting JSON as the corpus. To call the same investigator from an MCP host, install the model and MCP extras and use stdio. [PubMed, checkpoint resume and MCP examples](integrations.md)
 

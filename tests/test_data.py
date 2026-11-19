@@ -147,10 +147,28 @@ def test_acquire_verifies_size_hash_and_reuses_only_matching_files(
         "sha256": hashlib.sha256(payload).hexdigest(),
     }
     monkeypatch.setattr(data, "_source_pins", lambda: {"release": pin})
-    responses = iter([b"wrong release", payload])
-    monkeypatch.setattr(
-        data, "urlopen", lambda url, timeout: io.BytesIO(next(responses)), raising=False
+    import ssl
+    import sys
+    from types import SimpleNamespace
+
+    # An isolated context starts with no roots and still requires peer verification.
+    blank = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    assert not blank.get_ca_certs()
+    loaded = []
+    monkeypatch.setattr(ssl, "create_default_context", lambda: blank)
+    monkeypatch.setattr(blank, "load_verify_locations", loaded.append)
+    monkeypatch.setitem(
+        sys.modules, "certifi", SimpleNamespace(where=lambda: "trusted-ca.pem")
     )
+    responses = iter([b"wrong release", payload])
+
+    def open_verified(url, *, timeout, context):
+        assert loaded[-1] == "trusted-ca.pem"
+        assert context is blank and context.check_hostname
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        return io.BytesIO(next(responses))
+
+    monkeypatch.setattr(data, "urlopen", open_verified, raising=False)
     with pytest.raises(ValueError, match="pin"):
         data.acquire(tmp_path)
     assert not (tmp_path / "release").exists()

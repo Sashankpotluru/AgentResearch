@@ -229,3 +229,54 @@ test("trace rail and step navigation display the active run's recorded search, r
     ),
   );
 });
+
+for (const status of ["running", "failed"]) {
+  test(status + " imports announce and export provisional assessments", async (t) => {
+    const d = await desk(t);
+    assert.match(d.get("audit-status").textContent, /Current verdict/);
+    await d.get("save-json").click();
+    const bundle = JSON.parse(await d.downloads.at(-1).text());
+    const run = bundle.run;
+    run.events = [];
+    run.scores = [];
+    run.assessment = null;
+    run.status = status;
+    const zero = { search: 0, read: 0, verify: 0 };
+    run.usage = {
+      attempts: { ...zero },
+      successes: zero,
+      unique_sources: 0,
+      nli_pairs: 0,
+    };
+    if (status === "failed") {
+      const { digest } = await import("../../site/decision.js");
+      const event = {
+        sequence: 1,
+        tool: "search",
+        input: { claim: run.claim, mode: "relevance", limit: 12 },
+        output: null,
+        attempt: 1,
+        error: "permanent",
+        previous_hash: null,
+      };
+      run.events.push({ ...event, hash: await digest(event) });
+      run.usage.attempts.search = 1;
+    }
+    bundle.sources = {};
+    const bytes = new TextEncoder().encode(JSON.stringify(bundle));
+    const input = d.get("import-file");
+    input.files = [{ size: bytes.length, arrayBuffer: async () => bytes.buffer }];
+    await input.fire("change");
+    assert.equal(d.get("claim").value, "import", d.get("status").textContent);
+    assert.match(
+      d.get("audit-status").textContent,
+      new RegExp(status + ".*Provisional verdict", "i"),
+    );
+    await d.get("save-md").click();
+    const md = await d.downloads.at(-1).text();
+    assert.match(md, new RegExp("Recorded status: \\*\\*" + status));
+    assert.doesNotMatch(md, /Original verdict|Current audit/);
+    assert.match(md, /Provisional audit/);
+    assert.match(md, /Provisional base verdict/);
+  });
+}

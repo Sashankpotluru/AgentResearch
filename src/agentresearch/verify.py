@@ -124,9 +124,9 @@ def check_calibration(cal, p, *, prepared_dir=None):
         ),
     )
     info = p["datasets"]["scifact"]
+    integer(cal["schema_version"], 1, 1)
     require(
-        cal["protocol_sha256"] == file_digest(protocol_path())
-        and cal["schema_version"] == 1,
+        cal["protocol_sha256"] == file_digest(protocol_path()),
         "calibration protocol mismatch",
     )
     require(
@@ -642,9 +642,9 @@ def _official_manifest(path):
             "calibration_sha256",
         ),
     )
+    integer(m["schema_version"], 1, 1)
     require(
-        m["schema_version"] == 1
-        and m["protocol_sha256"] == file_digest(protocol_path())
+        m["protocol_sha256"] == file_digest(protocol_path())
         and file_digest(path / "protocol.json") == m["protocol_sha256"]
         and file_digest(path / "calibration.json") == m["calibration_sha256"],
         "release protocol/calibration pin mismatch",
@@ -740,9 +740,9 @@ def verify_results(
             )
     summary = read(path / "summary.json")
     keys(summary, ("schema_version", "threshold", "model_digest", "datasets"))
+    integer(summary["schema_version"], 1, 1)
     require(
-        summary["schema_version"] == 1
-        and summary["threshold"] == cal["threshold"]
+        summary["threshold"] == cal["threshold"]
         and summary["model_digest"] == cal["model_digest"]
         and summary["datasets"].keys() == p["gold_classes"].keys(),
         "summary provenance mismatch",
@@ -818,9 +818,9 @@ def verify_results(
                 expected_files.add(rel)
                 traces = read(path / rel)
                 keys(traces, ("schema_version", "query_id", "runs"))
+                integer(traces["schema_version"], 1, 1)
                 require(
-                    traces["schema_version"] == 1
-                    and traces["query_id"] == qid
+                    traces["query_id"] == qid
                     and traces["runs"].keys() == {f"{pol}-{b}" for pol, b in runs[qid]},
                     "trace group mismatch",
                 )

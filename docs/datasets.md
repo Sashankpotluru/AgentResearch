@@ -6,6 +6,8 @@ From a checkout with the package installed, fetch and verify the two releases. L
 agentresearch prepare --download --raw-dir .artifacts/raw --out-dir .artifacts/prepared
 ```
 
+The downloader verifies HTTPS certificates using Python’s configured trust roots. If these are empty, it uses the certifi bundle when installed. An administrator-provided CA bundle can also be selected through `SSL_CERT_FILE`.
+
 The source pins specify the exact URLs, byte lengths and SHA-256 hashes. Preparation checks both releases before reading their data. For SciFact, it reads three named regular files inside the gzip tar archive. The output manifest records the raw pins, the digest of each source corpus, each generated file's SHA-256, split sizes, label counts and connected-component sizes. [Source pins](../data/sources.json)
 
 | Dataset | Runtime corpus | Evaluation inputs |

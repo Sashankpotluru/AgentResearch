@@ -6,12 +6,12 @@ Install the package and the model extra, prepare a corpus and download the locke
 agentresearch run --corpus .artifacts/prepared/scifact/corpus.jsonl \
   --model-dir .artifacts/model --db .artifacts/runs.sqlite \
   --cache .artifacts/scores.sqlite --claim "Leaf exposure affects photosynthesis." \
-  --policy challenge --budget 4 --threshold 800000 --run-id leaf-exposure \
+  --policy challenge --budget 4 --threshold 800000 --run-id leaf-exposure-resume \
   --max-steps 1 > .artifacts/partial.json
 
 agentresearch resume --corpus .artifacts/prepared/scifact/corpus.jsonl \
   --model-dir .artifacts/model --db .artifacts/runs.sqlite \
-  --cache .artifacts/scores.sqlite --run-id leaf-exposure > .artifacts/run.json
+  --cache .artifacts/scores.sqlite --run-id leaf-exposure-resume > .artifacts/run.json
 
 agentresearch audit .artifacts/run.json .artifacts/prepared/scifact/corpus.jsonl
 agentresearch report .artifacts/run.json .artifacts/prepared/scifact/corpus.jsonl > .artifacts/report.md
@@ -46,4 +46,4 @@ agentresearch serve-mcp --corpus .artifacts/prepared/scifact/corpus.jsonl \
 | `investigate` | Claim, threshold in millionths, policy, budget 1–8 | Versioned investigation trace with a stored run ID |
 | `audit_run` | A locally stored run ID | Replay status and assessment |
 
-Search and read can run before loading the neural model. Investigation loads the verified model on demand. Tool arguments accept claims up to 10,000 characters and IDs up to 512 characters. The process uses stdout for protocol traffic and stderr for diagnostics. [Official MCP server guide](https://modelcontextprotocol.io/docs/2026-07-28/develop/build-server)
+The MCP server requires a file-backed checkpoint because each tool call opens a separate connection. Use a SQLite file path for `--db`. Search and read can run before loading the neural model. Investigation loads the verified model on demand. Tool arguments accept claims up to 10,000 characters and IDs up to 512 characters. The process uses stdout for protocol traffic and stderr for diagnostics. [Official MCP server guide](https://modelcontextprotocol.io/docs/2026-07-28/develop/build-server)

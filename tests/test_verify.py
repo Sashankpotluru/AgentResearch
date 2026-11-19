@@ -410,3 +410,28 @@ def test_explicit_external_selection_reference_and_digest(fixture_release, tmp_p
         verify.verify_results(out, frozen_calibration=out / "calibration.json")
     with pytest.raises(ValueError, match="independently frozen"):
         verify.verify_results(out, frozen_sha256="0" * 64)
+
+
+@pytest.mark.parametrize("bad_version", [True, 1.0])
+@pytest.mark.parametrize(
+    "relative",
+    ["manifest.json", "calibration.json", "summary.json", "scifact/traces/3.json.gz"],
+)
+def test_envelope_requires_integer_version(fixture_release, relative, bad_version):
+    from agentresearch import experiment as exp
+    from agentresearch.data import file_digest
+
+    out, _, _, frozen, *_ = fixture_release
+    artifact = out / relative
+    payload = exp.read(artifact)
+    payload["schema_version"] = bad_version
+    exp.write(artifact, payload)
+    if relative != "manifest.json":
+        manifest = exp.read(out / "manifest.json")
+        manifest["files"][relative] = file_digest(artifact)
+        if relative == "calibration.json":
+            manifest["calibration_sha256"] = file_digest(artifact)
+            exp.write(frozen, payload)
+        exp.write(out / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="integer"):
+        verify.verify_results(out, frozen_calibration=frozen)

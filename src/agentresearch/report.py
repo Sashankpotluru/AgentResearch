@@ -2,6 +2,7 @@
 
 import html
 import re
+import socket
 from urllib.parse import urlsplit
 
 from .engine import append_event, new_run, next_action
@@ -88,9 +89,16 @@ def _source_url(raw):
             or "@" in parsed.netloc
         ):
             return None
+        host = parsed.hostname.removesuffix(".")
+        # Web URLs with a final numeric label must parse as IPv4. inet_aton
+        # also recognizes valid compact forms such as 127.1 without a DNS lookup.
+        if ":" not in host and re.fullmatch(
+            r"[0-9]+|0x[0-9a-f]*", host.rsplit(".", 1)[-1]
+        ):
+            socket.inet_aton(host)
         # Force validation of any explicit port before emitting a destination.
         _ = parsed.port
-    except ValueError:
+    except (ValueError, OSError):
         return None
     return html.escape(raw, quote=False)
 

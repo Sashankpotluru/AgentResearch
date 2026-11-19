@@ -2,7 +2,6 @@
 
 import json
 import re
-import ssl
 import threading
 import time
 from http.client import IncompleteRead
@@ -13,6 +12,7 @@ from xml.etree.ElementTree import TreeBuilder
 from xml.parsers import expat
 
 from .schema import Corpus, Sentence, Source, integer, string
+from .transport import verified_context
 
 BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 MAX_BYTES = 5 * 1024 * 1024
@@ -26,16 +26,7 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 def _open(request, timeout):
-    # Use the OS trust store, supplemented on Python installations with no system roots.
-    context = ssl.create_default_context()
-    if not context.get_ca_certs():
-        try:
-            import certifi
-        except ImportError:
-            pass
-        else:
-            context.load_verify_locations(certifi.where())
-    return build_opener(_NoRedirect(), HTTPSHandler(context=context)).open(
+    return build_opener(_NoRedirect(), HTTPSHandler(context=verified_context())).open(
         request, timeout=timeout
     )
 

@@ -2,9 +2,9 @@
 
 import hashlib
 import json
-import sysconfig
 import tarfile
 from collections import Counter, defaultdict
+from importlib.metadata import distribution
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.request import urlopen
@@ -19,6 +19,7 @@ from .schema import (
     load_json,
     string,
 )
+from .transport import verified_context
 
 SPLITS = {"scifact": ("train", "calibration", "dev"), "climate": ("test",)}
 LABELS = {
@@ -32,10 +33,22 @@ LABELS = {
 
 
 def pin_path(name):
-    checkout = Path(__file__).resolve().parents[2] / "data" / name
-    if Path(__file__).resolve().parents[1].name == "src" and checkout.is_file():
+    module = Path(__file__).resolve()
+    repo_directory = "experiments" if name == "protocol.json" else "data"
+    checkout = module.parents[2] / repo_directory / name
+    if module.parents[1].name == "src" and checkout.is_file():
         return checkout
-    return Path(sysconfig.get_path("data")) / "share/agentresearch" / name
+    dist = distribution("agentresearch")
+    relative = Path("share", "agentresearch", name)
+    # pip --target relocates the data directory alongside the import package.
+    target = Path(dist.locate_file(relative))
+    if target.is_file():
+        return target
+    # Prefix and --user schemes record the data path relative to site-packages.
+    for entry in dist.files or ():
+        if entry.parts[-3:] == relative.parts and (path := entry.locate()).is_file():
+            return path
+    raise FileNotFoundError(f"missing installed AgentResearch resource: {name}")
 
 
 def _source_pins():
@@ -60,7 +73,7 @@ def acquire(raw_dir):
             ):
                 raise ValueError(f"existing file differs from raw data pin: {name}")
             continue
-        with urlopen(pin["url"], timeout=30) as response:
+        with urlopen(pin["url"], timeout=30, context=verified_context()) as response:
             content = response.read(pin["bytes"] + 1)
         if (
             len(content) != pin["bytes"]

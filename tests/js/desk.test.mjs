@@ -313,3 +313,15 @@ test("portable Unicode offsets preserve astral text, truncated scores and hostil
   assert.equal(run.assessment.final.verdict, "ABSTAIN");
   assert.equal(run.assessment.withdrawals["__proto__"].verdict, "INSUFFICIENT");
 });
+
+test("Markdown preserves interior whitespace in identifiers, titles and the claim", async () => {
+  const bundle = clone(example());
+  const sid = bundle.run.scores[0].span.source_id;
+  bundle.sources[sid].title = "Lab  A\r\nStudy";
+  bundle.run.claim = "Claim  with   gaps\nand a newline";
+  bundle.view.excluded_source_ids = ["lab  A", "lab A"];
+  const output = await markdown(bundle);
+  assert.match(output, /Lab  A Study/);
+  assert.match(output, /Claim  with   gaps and a newline/);
+  assert.match(output, /Excluded sources: lab  A, lab A/);
+});

@@ -8,6 +8,12 @@ from .store import RunStore
 
 
 def create_server(corpus, index, investigator, db_path):
+    # SQLite also supports temporary databases via an empty name and memory URIs.
+    # Ask the connection which file backs main before advertising resumable runs.
+    with RunStore(db_path) as store:
+        if not store.db.execute("PRAGMA database_list").fetchone()[2]:
+            raise ValueError("serve-mcp requires a file-backed --db checkpoint")
+
     from mcp.server import MCPServer
     from mcp.server.mcpserver.exceptions import ToolError
     from pydantic import Field

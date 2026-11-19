@@ -5,7 +5,6 @@ import gzip
 import hashlib
 import io
 import json
-import sysconfig
 import time
 from contextlib import contextmanager
 from fractions import Fraction
@@ -26,12 +25,7 @@ CLASSES = ("SUPPORTS", "REFUTES", "INSUFFICIENT", "CONFLICT", "ABSTAIN")
 
 
 def protocol_path():
-    path = Path(__file__).resolve().parents[2] / "experiments/protocol.json"
-    return (
-        path
-        if path.is_file()
-        else Path(sysconfig.get_path("data")) / "share/agentresearch/protocol.json"
-    )
+    return pin_path("protocol.json")
 
 
 def read(path):

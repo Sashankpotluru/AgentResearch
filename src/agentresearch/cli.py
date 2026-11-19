@@ -22,7 +22,7 @@ def _emit(obj):
 
 
 def _inspect(args):
-    run = load_json(args.run)
+    run = load_json(args.run, max_bytes=args.max_run_bytes)
     corpus = read_corpus(args.corpus)
     if args.command == "report":
         if args.bundle:
@@ -185,6 +185,12 @@ def build_parser():
     ]:
         command = commands.add_parser(name, help=description)
         command.add_argument("run", help="Run JSON path")
+        command.add_argument(
+            "--max-run-bytes",
+            type=int,
+            default=64 * 1024 * 1024,
+            help="Maximum local run JSON bytes to read (positive integer, default 64 MiB)",
+        )
         command.add_argument("corpus", help="Corpus JSON or prepared corpus.jsonl")
         if name == "report":
             command.add_argument(

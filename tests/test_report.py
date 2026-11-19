@@ -160,6 +160,11 @@ def test_report_identifies_conflict_and_replacement_witnesses():
     "url,expected",
     [
         ("https://pubmed.ncbi.nlm.nih.gov/123/", True),
+        ("https://999.999.999.999/article", False),
+        ("http://127.0.0.1/article", True),
+        ("http://127.1/article", True),
+        ("https://[2001:db8::1]:8000/article", True),
+        ("https://[::ffff:192.0.2.1]/article", True),
         ("javascript:alert(1)", False),
         ("https://user:secret@example.org/x", False),
         ("https://example.org/x>\n# injected", False),
@@ -215,3 +220,62 @@ def test_cli_report_bundle_includes_search_only_sources(tmp_path, capsys):
     }
     assert hits - {s["span"]["source_id"] for s in run["scores"]}
     assert set(bundle["sources"]) == hits
+
+
+def test_large_local_trace_cli_round_trip_and_limits(tmp_path):
+    from dataclasses import replace
+
+    from agentresearch.data import source_from_lines
+    from agentresearch.engine import Investigator
+    from agentresearch.retrieval import BM25Index
+    from agentresearch.schema import Corpus, RunConfig, ScoredSpan, canonical_bytes
+    from agentresearch.store import RunStore
+    from agentresearch.tools import CorpusTools
+
+    class PrefixVerifier:
+        model_digest = "short-prefix"
+
+        def verify(self, claim, spans):
+            (span,) = spans
+            prefix = replace(span, end=3, quote="ice")
+            return (ScoredSpan(prefix, 0, 1000000, 0, self.model_digest),)
+
+    source = source_from_lines("ice", "Ice", [("1", "ice " + "x" * 2_830_000)])
+    corpus = Corpus((source,))
+    verifier = PrefixVerifier()
+    tools = CorpusTools(corpus, BM25Index(corpus), verifier)
+    config = RunConfig("fixed", 1, 900000, verifier.model_digest)
+    with RunStore(":memory:") as store:
+        run = Investigator(tools, store).run("ice", config)
+    run_path, corpus_path = tmp_path / "run.json", tmp_path / "corpus.json"
+    run_path.write_bytes(canonical_bytes(run))
+    corpus_path.write_bytes(canonical_bytes(corpus.to_dict()))
+    assert run["status"] == "complete"
+    assert 5.3 < run_path.stat().st_size / 1024**2 < 5.5
+
+    def cli(command, *args):
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "agentresearch",
+                command,
+                run_path,
+                corpus_path,
+                *args,
+            ],
+            check=False,
+            env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+            capture_output=True,
+            text=True,
+        )
+
+    audit = cli("audit")
+    assert audit.returncode == 0, audit.stderr
+    assert json.loads(audit.stdout)["valid"]
+    report = cli("report")
+    assert report.returncode == 0 and "SUPPORTS" in report.stdout
+    limited = cli("audit", "--max-run-bytes", "5242880")
+    assert limited.returncode == 2 and "size limit" in limited.stderr
+    portable = cli("report", "--bundle")
+    assert portable.returncode == 2 and "5 MiB" in portable.stderr

@@ -175,8 +175,9 @@ function showSummary(current) {
   );
   p.append(result);
   const m =
-    "Recorded verdict: " +
-    (verdicts[original] ?? run.status) +
+    (original
+      ? "Recorded verdict: " + verdicts[original]
+      : "Recorded status: " + run.status) +
     (record ? " · Dataset label: " + verdicts[record.label] : "");
   p.append(el("p", m, "annotation"));
   let reason = current.stable
@@ -426,7 +427,9 @@ function drawAssessment(current, focus, announce) {
       ?.focus();
   if (announce)
     $("audit-status").textContent =
-      "Current verdict " +
+      (bundle.run.status === "complete"
+        ? "Current verdict "
+        : "Recorded status: " + bundle.run.status + ". Provisional verdict ") +
       verdicts[current.final.verdict] +
       ". " +
       excluded.size +
