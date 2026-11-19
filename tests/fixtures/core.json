@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "a",
+      "title": "Sea ice",
+      "text": "Sea ice 🧊.\nIce recovered.\nSky.",
+      "sentences": [
+        {
+          "sentence_id": "0",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "sentence_id": "1",
+          "start": 11,
+          "end": 25
+        },
+        {
+          "sentence_id": "2",
+          "start": 26,
+          "end": 30
+        }
+      ],
+      "url": null
+    },
+    {
+      "source_id": "b",
+      "title": "Sea",
+      "text": "Δ sea ice 🧊.\nHowever ice did not recover.\nSky.",
+      "sentences": [
+        {
+          "sentence_id": "0",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "sentence_id": "1",
+          "start": 13,
+          "end": 41
+        },
+        {
+          "sentence_id": "2",
+          "start": 42,
+          "end": 46
+        }
+      ],
+      "url": null
+    },
+    {
+      "source_id": "c",
+      "title": "Record",
+      "text": "Sea ice 🧊.\nIce recovered.\nSky.",
+      "sentences": [
+        {
+          "sentence_id": "0",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "sentence_id": "1",
+          "start": 11,
+          "end": 25
+        },
+        {
+          "sentence_id": "2",
+          "start": 26,
+          "end": 30
+        }
+      ],
+      "url": null
+    },
+    {
+      "source_id": "d",
+      "title": "Record",
+      "text": "Sea ice 🧊.\nIce recovered.\nSky.",
+      "sentences": [
+        {
+          "sentence_id": "0",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "sentence_id": "1",
+          "start": 11,
+          "end": 25
+        },
+        {
+          "sentence_id": "2",
+          "start": 26,
+          "end": 30
+        }
+      ],
+      "url": null
+    },
+    {
+      "source_id": "e",
+      "title": "Record",
+      "text": "Sea ice 🧊.\nIce recovered.\nSky.",
+      "sentences": [
+        {
+          "sentence_id": "0",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "sentence_id": "1",
+          "start": 11,
+          "end": 25
+        },
+        {
+          "sentence_id": "2",
+          "start": 26,
+          "end": 30
+        }
+      ],
+      "url": null
+    }
+  ]
+}

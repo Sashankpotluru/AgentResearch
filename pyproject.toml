@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentresearch"
+version = "0.1.0"
+description = "Resumable claim investigation with exact evidence spans and source-withdrawal audits"
+requires-python = ">=3.12"
+dependencies = ["numpy>=1.26"]
+license = "MIT"
+
+[project.scripts]
+agentresearch = "agentresearch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
