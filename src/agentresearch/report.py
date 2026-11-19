@@ -2,6 +2,7 @@
 
 import html
 import re
+from urllib.parse import urlsplit
 
 from .engine import append_event, new_run, next_action
 from .retrieval import BM25Index
@@ -54,6 +55,44 @@ def _validate(run, corpus, index):
             )
     if canonical_bytes(run) != canonical_bytes(replay):
         raise ValueError("trace summary does not match replay")
+
+
+def to_bundle(run, corpus):
+    """Export the immutable run and every source referenced by a search or read."""
+    validate_run(run, corpus)
+    ids = set()
+    for event in run["events"]:
+        if event["tool"] == "read":
+            ids.add(event["input"]["source_id"])
+        elif event["tool"] == "search" and event["error"] is None:
+            ids.update(hit["source_id"] for hit in event["output"])
+    bundle = {
+        "schema_version": 1,
+        "run": run,
+        "sources": {sid: corpus.by_id[sid].to_dict() for sid in sorted(ids)},
+        "view": {"excluded_source_ids": []},
+    }
+    if len(canonical_bytes(bundle)) + 1 > 5 * 1024 * 1024:
+        raise ValueError("portable bundle exceeds the 5 MiB import limit")
+    return bundle
+
+
+def _source_url(raw):
+    if not raw or re.search(r"""[\s\\<>"'`\x00-\x1f\x7f-\x9f]""", raw):
+        return None
+    try:
+        parsed = urlsplit(raw)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or "@" in parsed.netloc
+        ):
+            return None
+        # Force validation of any explicit port before emitting a destination.
+        _ = parsed.port
+    except ValueError:
+        return None
+    return html.escape(raw, quote=False)
 
 
 def _md(value):
@@ -130,7 +169,10 @@ def to_markdown(run, corpus):
                 "",
             ]
         )
-        lines.extend("> " + _md(line) for line in s["quote"].split("\n"))
+        url = _source_url(source.url)
+        if url:
+            lines.extend([f"[Source record](<{url}>)", ""])
+        lines.extend("> " + _md(line) for line in s["quote"].splitlines())
         lines.extend(
             [
                 "",

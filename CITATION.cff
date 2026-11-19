@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use AgentResearch, cite the software and the original datasets and model used in your experiment."
+title: AgentResearch
+type: software
+version: 0.1.0
+authors:
+  - given-names: Sri Sashank
+    family-names: Potluru
+repository-code: "https://github.com/Sashankpotluru/AgentResearch"
+url: "https://sashankpotluru.github.io/AgentResearch/"
+license: MIT

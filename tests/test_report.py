@@ -154,3 +154,64 @@ def test_report_identifies_conflict_and_replacement_witnesses():
     assert evidence["a", "0"] in removed_b and evidence["a", "1"] in removed_b
     removed_a = assessment_line("- Removing a ")
     assert "SUPPORTS" in removed_a and evidence["b", "0"] in removed_a
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://pubmed.ncbi.nlm.nih.gov/123/", True),
+        ("javascript:alert(1)", False),
+        ("https://user:secret@example.org/x", False),
+        ("https://example.org/x>\n# injected", False),
+        ("https://example.org/\\bad", False),
+        ("https://@example.org", False),
+        (None, False),
+    ],
+)
+def test_markdown_links_only_safe_source_urls(url, expected):
+    from dataclasses import replace
+
+    from test_engine import components, config
+
+    from agentresearch.engine import Investigator
+    from agentresearch.report import to_markdown
+    from agentresearch.retrieval import BM25Index
+    from agentresearch.schema import Corpus
+    from agentresearch.store import RunStore
+    from agentresearch.tools import CorpusTools
+
+    base = components()
+    corpus = Corpus(tuple(replace(s, url=url) for s in base.corpus.sources))
+    tools = CorpusTools(corpus, BM25Index(corpus), base.verifier)
+    with RunStore(":memory:") as store:
+        run = Investigator(tools, store).run("sea ice", config("fixed"))
+    md = to_markdown(run, corpus)
+    assert ("[Source record](<" in md) is expected
+    if expected:
+        assert f"[Source record](<{url}>)" in md
+    elif url:
+        assert url not in md
+    assert all(s["span"]["source_id"] in md for s in run["scores"])
+
+
+def test_cli_report_bundle_includes_search_only_sources(tmp_path, capsys):
+    from agentresearch.cli import main
+
+    run, corpus = example()
+    r = tmp_path / "run.json"
+    c = tmp_path / "corpus.json"
+    r.write_text(json.dumps(run))
+    c.write_text(json.dumps(corpus.to_dict()))
+    main(["report", str(r), str(c), "--bundle"])
+    bundle = json.loads(capsys.readouterr().out)
+    assert bundle["schema_version"] == 1
+    assert bundle["run"] == run
+    assert bundle["view"] == {"excluded_source_ids": []}
+    hits = {
+        h["source_id"]
+        for event in run["events"]
+        if event["tool"] == "search"
+        for h in event["output"]
+    }
+    assert hits - {s["span"]["source_id"] for s in run["scores"]}
+    assert set(bundle["sources"]) == hits

@@ -1,0 +1,11 @@
+# Tested direct dependency constraints for Python 3.12+. Pass with pip -c.
+numpy==2.5.5
+pytest==9.2.0
+mcp==2.3.0
+mcp-types==2.3.0
+torch==2.15.0
+transformers==5.23.0
+tokenizers==0.23.3
+safetensors==0.8.0
+sentencepiece==0.2.3
+certifi==2026.10.23

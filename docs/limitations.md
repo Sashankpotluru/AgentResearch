@@ -1,0 +1,13 @@
+# Where the evidence runs out
+
+**Corpus coverage.** SciFact supplies scientific abstracts. Climate-FEVER supplies candidate sentences from Wikipedia. For Climate, the investigator searches the pooled collection of 5,240 distinct sentences grouped into 1,344 article sources. Full articles, all of Wikipedia and unindexed research fall outside these experiments. Annotation recall measures overlap with documented evidence, which can be incomplete. [Dataset construction](datasets.md)
+
+**Model judgment.** Evidence quotes can be transcribed exactly and still receive the wrong judgment. The locked NLI model learned from SNLI/MultiNLI. Overlap with the benchmarks or underlying pretraining data is unknown. Scores are uncalibrated, the same threshold transfers to climate claims, and a 512-token limit can truncate the source premise. Both domains contain language that is difficult to judge from isolated sentences. [Model and truncation](model.md) · [Original model card](https://huggingface.co/cross-encoder/nli-deberta-v3-small)
+
+**Source dependence.** One withdrawal removes a whole source, including its strongest support and refutation. Stability can arise when several records repeat the same error. A pivotal source can be wrong or indispensable. Determining which interpretation fits requires reading the source and its context. [Withdrawal rule](method.md)
+
+**Performance.** At eight reads, challenge identified 17 of 124 SciFact claims labeled SUPPORTS and 31 of 654 Climate-FEVER claims labeled SUPPORTS. It retrieved complete annotated positive sentences at micro-recall 41.5% and 31.5%, respectively. Quote binding was 100% in both runs. These measurements describe literal binding, annotation recovery and classification at different stages. [Full results and confusion matrices](../results/summary.json)
+
+**Uncertainty.** Shared cited documents connect SciFact claims into 247 components. Shared evidence sentences connect Climate-FEVER claims into 410 components, including one containing 1,040 claims. The component and per-claim Climate intervals use different assumptions about dependence. Both can miss correlations from common source material. Cost counts logical tool requests. Cache reuse, batching and interruptions alter physical compute. [Measurement and uncertainty protocol](evaluation.md) · [Physical observations](../results/physical.json)
+
+**Scope of use.** The released artifacts evaluate retrieval, claim classification, quote integrity and source sensitivity on these two datasets. They provide no clinical decision validation, factual guarantee, or evaluation of open-ended answer writing. Assessing a new field, source collection or decision threshold requires a new evaluation. [Frozen protocol](../experiments/protocol.json)

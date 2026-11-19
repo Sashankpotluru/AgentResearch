@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .data import acquire, pin_path, prepare, read_corpus
 from .engine import Investigator
-from .report import to_markdown, validate_run
+from .report import to_bundle, to_markdown, validate_run
 from .retrieval import BM25Index
 from .schema import POLICIES, RunConfig, load_json
 from .store import RunStore
@@ -25,7 +25,10 @@ def _inspect(args):
     run = load_json(args.run)
     corpus = read_corpus(args.corpus)
     if args.command == "report":
-        sys.stdout.write(to_markdown(run, corpus))
+        if args.bundle:
+            _emit(to_bundle(run, corpus))
+        else:
+            sys.stdout.write(to_markdown(run, corpus))
     else:
         validate_run(run, corpus)
         _emit(
@@ -183,6 +186,12 @@ def build_parser():
         command = commands.add_parser(name, help=description)
         command.add_argument("run", help="Run JSON path")
         command.add_argument("corpus", help="Corpus JSON or prepared corpus.jsonl")
+        if name == "report":
+            command.add_argument(
+                "--bundle",
+                action="store_true",
+                help="Write a portable research desk JSON bundle",
+            )
         command.set_defaults(handler=_inspect)
     prep = commands.add_parser(
         "prepare",
