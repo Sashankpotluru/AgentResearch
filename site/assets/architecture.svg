@@ -25,7 +25,8 @@
   <text class="name" x="520" y="235">NLI verifier</text><text class="body" x="520" y="260">Score exact excerpts</text><text class="body" x="520" y="282">Pin model and offsets</text>
   <text class="name" style="font-size:15px" x="737" y="235">Source withdrawal</text><text class="body" x="737" y="260">Remove each source</text><text class="body" x="737" y="282">Recompute decisions</text>
   <text class="name white" x="960" y="235">Cited report</text><text class="body light" x="960" y="260">Quotes, decisions</text><text class="body light" x="960" y="282">and the original trace</text>
-  <text x="51" y="375" class="section">Frozen benchmark and public release</text>
+  <text x="51" y="350" class="section">Frozen benchmark</text>
+  <text x="51" y="375" class="section">and public release</text>
   <g fill="#fff" stroke="#adc5b4"><rect x="51" y="394" width="331" height="111" rx="6"/><rect x="423" y="394" width="328" height="111" rx="6"/><rect x="792" y="394" width="336" height="111" rx="6"/></g>
   <path d="M373 306v81" class="line"/><text x="396" y="349" class="body">Same agent and frozen threshold for every held-out claim</text>
   <g class="line"><path d="M385 450h32"/><path d="M755 450h31"/></g>
