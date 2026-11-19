@@ -117,7 +117,15 @@ def _experiment(args):
     from .verify import verify_results
 
     if args.command == "verify":
-        _emit(verify_results(args.results, args.prepared, site_dir=args.site_dir))
+        _emit(
+            verify_results(
+                args.results,
+                args.prepared,
+                site_dir=args.site_dir,
+                frozen_calibration=args.frozen_calibration,
+                frozen_sha256=args.frozen_sha256,
+            )
+        )
         return
     options = {
         "device": args.device,
@@ -164,6 +172,9 @@ def build_parser():
     verify.add_argument("--results", required=True)
     verify.add_argument("--prepared")
     verify.add_argument("--site-dir")
+    reference = verify.add_mutually_exclusive_group()
+    reference.add_argument("--frozen-calibration")
+    reference.add_argument("--frozen-sha256")
     verify.set_defaults(handler=_experiment)
     for name, description in [
         ("audit", "Replay a trace against its corpus"),

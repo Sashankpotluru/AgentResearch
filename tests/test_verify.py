@@ -126,7 +126,7 @@ def fixture_release(tmp_path, monkeypatch, tiny):  # noqa: F811 -- pytest inject
 
     monkeypatch.setattr(model, "NeuralVerifier", Neural)
     cache = tmp_path / "scores.sqlite"
-    selected = tmp_path / "selection.json"
+    selected = tmp_path / "calibration.json"
     run = exp.calibrate(prepared, tmp_path, cache, selected)
     assert run["threshold"] == 900000  # all four grid values tie
     out = tmp_path / "results"
@@ -215,6 +215,8 @@ def test_corruption_rejected_even_after_rehash(fixture_release, fault):
     m = exp.read(out / "manifest.json")
     for rel in m["files"]:
         m["files"][rel] = file_digest(out / rel)
+    for rel in m["site_files"]:
+        m["site_files"][rel] = file_digest(site / rel)
     m["calibration_sha256"] = m["files"]["calibration.json"]
     exp.write(out / "manifest.json", m)
     with pytest.raises(ValueError):
@@ -259,3 +261,152 @@ def test_midrun_checkpoint_resume_and_fail_closed(
         original_out / "summary.json"
     ).read_bytes()
     assert verify.verify_results(out, prepared, site_dir=site)["verified"]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "selection",
+        "ordinal",
+        "order",
+        "length",
+        "missing_pair",
+        "site_bool",
+        "site_float",
+    ],
+)
+def test_rehashed_semantic_substitutions(fixture_release, fault):
+    from agentresearch import experiment as exp
+    from agentresearch.data import file_digest
+
+    out, prepared, site, selected, *_ = fixture_release
+    m = exp.read(out / "manifest.json")
+    if fault.startswith("site_"):
+        path = next((site / "claims").glob("*.json"))
+        obj = exp.read(path)
+        run = obj["runs"]["fixed-4"]
+        if fault == "site_bool":
+            run["events"][0]["sequence"] = True
+        else:
+            run["config"]["budget"] = 4.0
+        exp.write(path, obj)
+        m["site_files"][str(path.relative_to(site))] = file_digest(path)
+    else:
+        path = out / "calibration.json"
+        obj = exp.read(path)
+        scores = obj["queries"][0]["scores"]
+        if fault == "selection":
+            scores[0][3] += 1
+            scores[0][5] -= 1
+        elif fault == "ordinal":
+            scores[0][1] = 999999
+        elif fault == "order":
+            scores.reverse()
+        elif fault == "length":
+            scores[0][2] = 999999
+        else:
+            scores.pop()
+        exp.write(path, obj)
+        if fault != "selection":
+            # Simulate a flawed selection already present in the frozen reference.
+            selected.write_bytes(path.read_bytes())
+        m["calibration_sha256"] = m["files"]["calibration.json"] = file_digest(path)
+    exp.write(out / "manifest.json", m)
+    with pytest.raises(ValueError):
+        verify.verify_results(out, prepared, site_dir=site)
+
+
+def test_swapped_intact_checkpoints_stop_before_release(fixture_release, tmp_path):
+    from agentresearch import experiment as exp
+
+    _, prepared, _, selected, cache, work = fixture_release
+    a = next(work.glob("*/101.json.gz"))
+    b = a.with_name("102.json.gz")
+    a_bytes, b_bytes = a.read_bytes(), b.read_bytes()
+    a.write_bytes(b_bytes)
+    b.write_bytes(a_bytes)
+    out = tmp_path / "new-results"
+    with pytest.raises(ValueError, match="checkpoint"):
+        exp.evaluate(
+            prepared,
+            tmp_path,
+            cache,
+            selected,
+            out,
+            work_dir=work,
+            site_dir=tmp_path / "new-site",
+        )
+    assert not (out / "manifest.json").exists()
+
+
+def test_process_death_before_atomic_replace_and_resume(
+    fixture_release, tmp_path, monkeypatch
+):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from agentresearch import experiment as exp
+
+    _, prepared, _, selected, cache, work = fixture_release
+    out, site = tmp_path / "crash-results", tmp_path / "crash-site"
+    unrelated = work / "unrelated_file"
+    unrelated.write_text("preserve")
+    write_bytes = exp.write_bytes
+    # Execute the actual public write, with evaluate's selected staging path,
+    # in a fresh process which dies after the flush and before the rename.
+    child_code = """
+import os
+import sys
+from pathlib import Path
+from agentresearch.experiment import write_bytes
+Path.replace = lambda *args: os._exit(73)
+write_bytes(Path(sys.argv[1]), sys.stdin.buffer.read(), staging=sys.argv[2] or None)
+"""
+
+    def interrupt_public_write(path, data, *, staging=None):
+        if out not in Path(path).parents:
+            return write_bytes(path, data, staging=staging)
+        child = subprocess.run(
+            [sys.executable, "-c", child_code, str(path), str(staging or "")],
+            input=data,
+            capture_output=True,
+            timeout=15,
+            check=False,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(Path(exp.__file__).resolve().parents[1]),
+            },
+        )
+        assert child.returncode == 73, child.stderr
+        raise InterruptedError("public writer terminated")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(exp, "write_bytes", interrupt_public_write)
+        with pytest.raises(InterruptedError, match="public writer terminated"):
+            exp.evaluate(
+                prepared, tmp_path, cache, selected, out, work_dir=work, site_dir=site
+            )
+    result = exp.evaluate(
+        prepared, tmp_path, cache, selected, out, work_dir=work, site_dir=site
+    )
+    assert result["run_count"] == 32
+    assert verify.verify_results(out, prepared, site_dir=site)["verified"]
+    assert unrelated.read_text() == "preserve"
+
+
+def test_explicit_external_selection_reference_and_digest(fixture_release, tmp_path):
+    from agentresearch.data import file_digest
+
+    out, _, _, selected, *_ = fixture_release
+    independent = tmp_path / "previous-selection.json"
+    independent.write_bytes(selected.read_bytes())
+    assert verify.verify_results(out, frozen_calibration=independent)["verified"]
+    assert verify.verify_results(out, frozen_sha256=file_digest(independent))[
+        "verified"
+    ]
+    with pytest.raises(ValueError, match="separate"):
+        verify.verify_results(out, frozen_calibration=out / "calibration.json")
+    with pytest.raises(ValueError, match="independently frozen"):
+        verify.verify_results(out, frozen_sha256="0" * 64)

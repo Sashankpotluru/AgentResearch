@@ -5,7 +5,6 @@ import gzip
 import hashlib
 import io
 import json
-import shutil
 import sysconfig
 import time
 from contextlib import contextmanager
@@ -66,10 +65,10 @@ def encoded(obj):
     )
 
 
-def write_bytes(path, data):
+def write_bytes(path, data, *, staging=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
+    with NamedTemporaryFile(dir=staging or path.parent, delete=False) as tmp:
         try:
             tmp.write(data)
             tmp.close()
@@ -78,14 +77,34 @@ def write_bytes(path, data):
             Path(tmp.name).unlink(missing_ok=True)
 
 
-def write(path, obj):
+def write(path, obj, *, staging=None):
     data = encoded(obj)
     write_bytes(
         path,
         gzip.compress(data, compresslevel=6, mtime=0)
         if Path(path).suffix == ".gz"
         else data,
+        staging=staging,
     )
+
+
+def _public_staging(destination, work, public_roots):
+    # A killed writer may leave an unrenamed file here. Never enumerate staging
+    # as part of either public release inventory or remove someone else's file.
+    destination.mkdir(parents=True, exist_ok=True)
+    work.mkdir(parents=True, exist_ok=True)
+    if work.stat().st_dev == destination.stat().st_dev:
+        stage = work / ".pending"
+    else:
+        stage = destination.parent / ".agentresearch-pending"
+    if any(stage.resolve().is_relative_to(root.resolve()) for root in public_roots):
+        raise ValueError("public outputs require separate private staging")
+    stage.mkdir(exist_ok=True)
+    if stage.stat().st_dev != destination.stat().st_dev:
+        raise ValueError(
+            "provide a work directory on the output filesystem for atomic publication"
+        )
+    return stage
 
 
 def source_ordinals(corpus):
@@ -404,6 +423,60 @@ def csv_bytes(summary):
     return out.getvalue().encode()
 
 
+def _check_query_checkpoint(data, name, query, cal, corpus, p):
+    qid = query["query_id"]
+    expected = {
+        (policy, budget): checkpoint_id(
+            name,
+            qid,
+            policy,
+            budget,
+            cal["threshold"],
+            cal["model_digest"],
+            corpus.digest,
+        )
+        for policy in p["policies"]
+        for budget in p["budgets"]
+    }
+    rows = data["records"]
+    expected_runs = (
+        {f"{policy}-{budget}" for policy, budget in expected}
+        if name == "scifact"
+        else set()
+    )
+    if len(rows) != len(expected) or data["runs"].keys() != expected_runs:
+        raise ValueError(f"incomplete checkpoint for {name}/{qid}")
+    seen = set()
+    for r in rows:
+        config = r["policy"], r["budget"]
+        if (
+            config in seen
+            or config not in expected
+            or r["run_id"] != expected[config]
+            or r["query_id"] != qid
+            or r["cluster_id"] != query["cluster_id"]
+            or r["label"] != CLASSES.index(query["label"])
+        ):
+            raise ValueError(f"checkpoint identity mismatch for {name}/{qid}")
+        seen.add(config)
+        if name == "scifact":
+            run = data["runs"][f"{config[0]}-{config[1]}"]
+            config_dict = RunConfig(
+                *config, cal["threshold"], cal["model_digest"]
+            ).to_dict()
+            if (
+                run["run_id"] != expected[config]
+                or run["status"] != "complete"
+                or run["claim"] != query["claim"]
+                or run["model_digest"] != cal["model_digest"]
+                or run["corpus_digest"] != corpus.digest
+                or run["config"] != config_dict
+            ):
+                raise ValueError(
+                    f"incomplete or mismatched trace checkpoint for {name}/{qid}"
+                )
+
+
 def _evaluate_dataset(
     prepared,
     name,
@@ -415,6 +488,7 @@ def _evaluate_dataset(
     out,
     work,
     site,
+    stages,
     device,
     batch_size,
     warm,
@@ -454,23 +528,31 @@ def _evaluate_dataset(
                 if not qid.isascii() or not qid.isdecimal():
                     raise ValueError("benchmark query ID must be decimal")
                 saved = ckpt / (qid + ".json.gz")
-                if saved.is_file():
+                resumed = saved.is_file()
+                if resumed:
                     data = read(saved)
                     if digest(data["payload"]) != data["digest"]:
                         raise ValueError("checkpoint integrity mismatch")
                     data = data["payload"]
                 else:
                     data = _query_runs(name, q, tools, cal["threshold"], ordinals, p)
+                _check_query_checkpoint(data, name, q, cal, corpus, p)
+                if not resumed:
                     write(saved, {"digest": digest(data), "payload": data})
                 records.extend(data["records"])
                 if name == "scifact":
                     write(
                         out / name / "traces" / (qid + ".json.gz"),
                         {"schema_version": 1, "query_id": qid, "runs": data["runs"]},
+                        staging=stages[out],
                     )
                     if qid in selection:
                         path = f"claims/{qid}.json"
-                        write(site / path, demo_claim(q, data["runs"], corpus))
+                        write(
+                            site / path,
+                            demo_claim(q, data["runs"], corpus),
+                            staging=stages[site],
+                        )
                         choices[qid] = {
                             "query_id": qid,
                             "claim": q["claim"],
@@ -481,7 +563,11 @@ def _evaluate_dataset(
         write(cost_file, physical)
     if name == "scifact":
         for file in ("corpus.jsonl", f"{split}.jsonl"):
-            shutil.copyfile(Path(prepared) / name / file, out / name / file)
+            write_bytes(
+                out / name / file,
+                (Path(prepared) / name / file).read_bytes(),
+                staging=stages[out],
+            )
         write(
             site / "index.json",
             {
@@ -493,8 +579,13 @@ def _evaluate_dataset(
                 "corpus_digest": corpus.digest,
                 "model_digest": cal["model_digest"],
             },
+            staging=stages[site],
         )
-    write(out / name / "records.json.gz", {"schema_version": 1, "records": records})
+    write(
+        out / name / "records.json.gz",
+        {"schema_version": 1, "records": records},
+        staging=stages[out],
+    )
     unc = p["evaluation"]["uncertainty"]
     summary = analyze(
         records,
@@ -525,7 +616,7 @@ def evaluate(
 
     p = check_inputs(prepared)
     cal = read(calibration)
-    check_calibration(cal, p)
+    check_calibration(cal, p, prepared_dir=prepared)
     out, work = Path(output), Path(work_dir)
     site = Path(site_dir) if site_dir else out.parent / "site/data"
     cal_hash = file_digest(calibration)
@@ -536,7 +627,7 @@ def evaluate(
         "datasets": {},
     }
     physical, sessions = {}, {}
-    out.mkdir(parents=True, exist_ok=True)
+    stages = {root: _public_staging(root, work, (out, site)) for root in (out, site)}
     for name in p["evaluation"]["splits"]:
         summary["datasets"][name], physical[name], sessions[name] = _evaluate_dataset(
             prepared,
@@ -549,22 +640,24 @@ def evaluate(
             out,
             work,
             site,
+            stages,
             device,
             batch_size,
             warm,
         )
-    write(out / "summary.json", summary)
-    write_bytes(out / "summary.csv", csv_bytes(summary))
-    write(site / "summary.json", summary)
+    write(out / "summary.json", summary, staging=stages[out])
+    write_bytes(out / "summary.csv", csv_bytes(summary), staging=stages[out])
+    write(site / "summary.json", summary, staging=stages[site])
     for src, dest in (
         (protocol_path(), out / "protocol.json"),
         (Path(calibration), out / "calibration.json"),
     ):
         if src.resolve() != dest.resolve():
-            shutil.copyfile(src, dest)
+            write_bytes(dest, src.read_bytes(), staging=stages[out])
     write(
         out / "physical.json",
         {"schema_version": 1, "invocation": physical, "sessions": sessions},
+        staging=stages[out],
     )
     files = {
         str(f.relative_to(out)): file_digest(f)
@@ -584,9 +677,14 @@ def evaluate(
                 if f.is_file()
             },
         },
+        staging=stages[out],
     )
     return {
         "results": str(out),
         "site": str(site),
-        "run_count": sum(v["queries"] * 8 for v in summary["datasets"].values()),
+        "run_count": sum(
+            config["n"]
+            for dataset in summary["datasets"].values()
+            for config in dataset["configs"].values()
+        ),
     }

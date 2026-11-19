@@ -107,7 +107,7 @@ def _scores(scores, nsources):
         seen.add((sid, j))
 
 
-def check_calibration(cal, p):
+def check_calibration(cal, p, *, prepared_dir=None):
     keys(
         cal,
         (
@@ -204,6 +204,48 @@ def check_calibration(cal, p):
         cal["threshold"] == max(zip(vals, grid, strict=True))[1],
         "calibrated threshold differs",
     )
+
+    if prepared_dir is not None:
+        _replay_calibration(cal, p, prepared_dir)
+
+
+def _replay_calibration(cal, p, prepared):
+    corpus, queries = load_dataset(prepared, "scifact", "calibration")
+    require(
+        corpus.digest == cal["corpus_digest"]
+        and file_digest(Path(prepared) / "scifact/calibration.jsonl")
+        == cal["split_sha256"],
+        "prepared calibration source differs from frozen split",
+    )
+    index = make_index(corpus)
+    ordinals = {
+        s.source_id: (i, {t.sentence_id: j for j, t in enumerate(s.sentences)})
+        for i, s in enumerate(corpus.sources)
+    }
+    ledger = {row["query_id"]: row for row in cal["queries"]}
+    for q in queries:
+        row = ledger[q["query_id"]]
+        require(
+            row["label"] == CLASSES.index(q["label"]),
+            "prepared calibration label mismatch",
+        )
+        expected = []
+        for hit in index.search(q["claim"])[: p["calibration"]["budget"]]:
+            sid = hit["source_id"]
+            s, positions = ordinals[sid]
+            for span in index.read(q["claim"], sid):
+                expected.append((s, positions[span.sentence_id], span))
+        require(
+            len(expected) == len(row["scores"]),
+            "calibration fixed-eight pair count mismatch",
+        )
+        for (s, j, span), score in zip(expected, row["scores"], strict=True):
+            require(
+                score[:2] == [s, j]
+                and 0 < score[2] <= len(span.quote)
+                and bool(span.quote[: score[2]].strip()),
+                "calibration fixed-eight acquisition or retained prefix mismatch",
+            )
 
 
 def check_records(records, name, cal, p):
@@ -616,13 +658,41 @@ def _official_manifest(path):
     return m
 
 
-def verify_results(path, prepared_dir=None, *, site_dir=None):
+def verify_results(
+    path,
+    prepared_dir=None,
+    *,
+    site_dir=None,
+    frozen_calibration=None,
+    frozen_sha256=None,
+):
     path = Path(path)
     manifest = _official_manifest(path)
+    if frozen_calibration is not None and frozen_sha256 is not None:
+        raise ValueError("supply one external calibration reference")
+    if frozen_sha256 is None:
+        reference = (
+            Path(frozen_calibration)
+            if frozen_calibration is not None
+            else protocol_path().with_name("calibration.json")
+        )
+        if not reference.is_file():
+            raise ValueError(
+                "missing frozen calibration reference; pass --frozen-calibration or --frozen-sha256"
+            )
+        require(
+            not reference.samefile(path / "calibration.json"),
+            "frozen calibration reference must be separate from the release copy",
+        )
+        frozen_sha256 = file_digest(reference)
+    require(
+        manifest["calibration_sha256"] == frozen_sha256,
+        "release differs from independently frozen calibration",
+    )
     files = manifest["files"]
     p = read(protocol_path())
     cal = read(path / "calibration.json")
-    check_calibration(cal, p)
+    check_calibration(cal, p, prepared_dir=prepared_dir)
     cost = read(path / "physical.json")
     keys(cost, ("schema_version", "invocation", "sessions"))
     integer(cost["schema_version"], 1, 1)
@@ -824,7 +894,8 @@ def _verify_site(out, site, corpus, queries, cal, p):
     )
     for q, choice in zip(selected, choices, strict=True):
         group = read(out / f"scifact/traces/{q['query_id']}.json.gz")
-        require(
-            read(site / choice["path"]) == demo_claim(q, group["runs"], corpus),
-            "site trace/source mismatch",
+        compare(
+            read(site / choice["path"]),
+            demo_claim(q, group["runs"], corpus),
+            "site trace/source",
         )

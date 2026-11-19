@@ -13,7 +13,19 @@ python scripts/reproduce.py calibrate --prepared .artifacts/prepared --model .ar
   --output experiments/calibration.json
 ```
 
-Commit the selected calibration artifact before evaluating held-out claims. The calibration stage runs fixed acquisition once per claim at eight reads. It applies each grid threshold to the resulting identical score ledger, computes three-class macro F1, and breaks exact rational ties by taking the higher threshold. The artifact includes every calibration claim's numeric scores, outcomes, benchmark class, model identity, and split and protocol hashes. The command prints its byte digest and physical invocation measurements.
+Independently check the selection against the prepared calibration split, then commit it before evaluating held-out claims.
+
+```sh
+PYTHONPATH=src python - <<'PYTHON'
+from agentresearch.experiment import protocol_path, read
+from agentresearch.verify import check_calibration
+
+check_calibration(read("experiments/calibration.json"), read(protocol_path()),
+                  prepared_dir=".artifacts/prepared")
+PYTHON
+```
+
+The calibration stage runs fixed acquisition once per claim at eight reads. It applies each grid threshold to the resulting identical score ledger, computes three-class macro F1, and breaks exact rational ties by taking the higher threshold. The artifact includes every calibration claim's numeric scores, outcomes, benchmark class, model identity, and split and protocol hashes. The command prints its byte digest and physical invocation measurements.
 
 ```sh
 python scripts/reproduce.py evaluate --prepared .artifacts/prepared --model .artifacts/model \
@@ -21,12 +33,15 @@ python scripts/reproduce.py evaluate --prepared .artifacts/prepared --model .art
   --calibration experiments/calibration.json --output results \
   --work-dir .artifacts/eval-work --site-dir site/data
 python scripts/verify_release.py --results results --site-dir site/data
-python scripts/verify_release.py --results results --site-dir site/data --prepared .artifacts/prepared
+python scripts/verify_release.py --results results --site-dir site/data --prepared .artifacts/prepared \
+  --frozen-calibration experiments/calibration.json
 ```
 
-The installed commands are `agentresearch calibrate`, `agentresearch evaluate`, and `agentresearch verify --results results [--site-dir site/data] [--prepared .artifacts/prepared]`. The Python entry points `experiment.calibrate(prepared, model, cache, output, *, device, batch_size, warm)` and `experiment.evaluate(prepared, model, cache, calibration, output, *, device, batch_size, work_dir, site_dir, warm)` accept the same paths. `verify.verify_results(path, prepared_dir=None, *, site_dir=None)` raises on mismatches.
+The installed commands are `agentresearch calibrate`, `agentresearch evaluate`, and `agentresearch verify --results results [--site-dir site/data] [--prepared .artifacts/prepared]`. The Python entry points `experiment.calibrate(prepared, model, cache, output, *, device, batch_size, warm)` and `experiment.evaluate(prepared, model, cache, calibration, output, *, device, batch_size, work_dir, site_dir, warm)` accept the same paths. `verify.verify_results(path, prepared_dir=None, *, site_dir=None, frozen_calibration=None, frozen_sha256=None)` raises on mismatches.
 
-Resume an interrupted evaluation by repeating the evaluation command with the same paths. Each completed query's eight runs form one checksummed, atomically replaced checkpoint. The checkpoint directory depends on the calibration file hash, dataset and corpus digest. Interrupted claims restart. Invalid or incomplete runs stop the pipeline. Finish verification before publishing the release.
+The release verifier checks the calibration copy against the separately frozen selection. From a source checkout it defaults to `experiments/calibration.json`. For a custom reproduction, pass `--frozen-calibration PATH` or a previously recorded `--frozen-sha256 HEX`. Prepared verification checks the original fixed-eight source ranking, ordered sentence selection, and valid retained prefix lengths for every calibration query.
+
+Resume an interrupted evaluation by repeating the evaluation command with the same paths. Each completed query's eight runs form one checksummed, atomically replaced checkpoint. The checkpoint directory depends on the calibration file hash, dataset and corpus digest. Checkpoint loading validates the query identity, all eight configurations, and SciFact trace completion before accumulating records. Interrupted claims restart. Public writes stage in a private directory on the destination filesystem before atomic replacement. Invalid or incomplete runs stop the pipeline. Finish verification before publishing the release.
 
 ## Measurement
 
