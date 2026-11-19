@@ -408,6 +408,9 @@ async function render(focus, announce = false) {
   if (!active) return;
   const current = await viewAssessment(active.run, excluded);
   if (stamp !== paint || active !== bundle) return;
+  drawAssessment(current, focus, announce);
+}
+function drawAssessment(current, focus, announce) {
   drawRail();
   drawDrawer(current);
   $("paper").replaceChildren();
@@ -429,76 +432,110 @@ async function render(focus, announce = false) {
       excluded.size +
       " sources excluded.";
 }
+function setAvailable(ready) {
+  $("workspace").hidden = !ready;
+  $("save-json").disabled = !ready;
+  $("save-md").disabled = !ready;
+  if (!ready) {
+    $("exports").open = false;
+    $("audit-status").textContent = "";
+  }
+}
+function beginRequest(message) {
+  ++paint;
+  setAvailable(false);
+  note(message);
+  return ++request;
+}
+function syncSelectors() {
+  const imported = !record;
+  $("claim").querySelector('option[value="import"]')?.remove();
+  $("budget").querySelector("[data-import]")?.remove();
+  if (imported) {
+    $("claim").add(option("import", "Imported · " + bundle.run.claim));
+    if (![4, 8].includes(bundle.run.config.budget)) {
+      const budget = String(bundle.run.config.budget);
+      const extra = option(budget, budget + " sources");
+      extra.dataset.import = "";
+      $("budget").add(extra);
+    }
+  }
+  $("claim").value = imported ? "import" : record.query_id;
+  $("policy").value = bundle.run.config.policy;
+  $("budget").value = String(bundle.run.config.budget);
+  $("policy").disabled = imported;
+  $("budget").disabled = imported;
+  $("claim").disabled = !index;
+}
+async function restoreActive(token, message, error = true) {
+  if (token !== request) return;
+  if (bundle) {
+    const current = await viewAssessment(bundle.run, excluded);
+    if (token !== request) return;
+    syncSelectors();
+    drawAssessment(current, null, true);
+    setAvailable(true);
+  }
+  note(message, error);
+}
 async function activate(candidate, claimRecord, token) {
   await validateImport(candidate);
-  const hashIds = await Promise.all(
-    candidate.run.scores.map((row) => digest(row.span)),
-  );
   if (token !== request) return;
+  const [hashIds, current] = await Promise.all([
+    Promise.all(candidate.run.scores.map((row) => digest(row.span))),
+    viewAssessment(candidate.run, candidate.view.excluded_source_ids),
+  ]);
+  if (token !== request) return;
+  // Publish the selection, rendered paper and exportable bundle together.
   bundle = candidate;
   record = claimRecord;
   ids = hashIds;
   excluded = new Set(candidate.view.excluded_source_ids);
   selected = -1;
-  const imported = !record;
-  if (imported) {
-    const prior = $("claim").querySelector('option[value="import"]');
-    prior?.remove();
-    $("claim").add(option("import", "Imported · " + candidate.run.claim));
-    $("claim").value = "import";
-    $("policy").value = candidate.run.config.policy;
-    $("budget").querySelector("[data-import]")?.remove();
-    if (![4, 8].includes(candidate.run.config.budget)) {
-      const extra = option(
-        String(candidate.run.config.budget),
-        candidate.run.config.budget + " sources",
-      );
-      extra.dataset.import = "";
-      $("budget").add(extra);
-    }
-    $("budget").value = String(candidate.run.config.budget);
-  } else $("claim").querySelector('option[value="import"]')?.remove();
-  $("policy").disabled = imported;
-  $("budget").disabled = imported;
-  $("claim").disabled = !index;
-  $("save-json").disabled = false;
-  $("save-md").disabled = false;
-  $("workspace").hidden = false;
-  note(imported ? "Imported run checked against its supplied sources." : "");
-  await render(null, true);
+  syncSelectors();
+  drawAssessment(current, null, true);
+  setAvailable(true);
+  note(record ? "" : "Imported run checked against its supplied sources.");
 }
 async function loadClaim() {
-  const token = ++request,
-    item = index?.claims.find((c) => c.query_id === $("claim").value);
+  const id = $("claim").value;
+  if (id === "import" && bundle && !record) {
+    await restoreActive(
+      beginRequest("Opening imported run…"),
+      "Imported run checked against its supplied sources.",
+      false,
+    );
+    return;
+  }
+  const item = index?.claims.find((c) => c.query_id === id);
   if (!item) return;
+  const token = beginRequest("Loading claim " + item.query_id + "…");
+  if (!record && bundle) $("budget").value = "4";
+  const policy = $("policy").value,
+    budget = $("budget").value;
   try {
-    const wasImported = !record && bundle;
-    if (wasImported) {
-      $("budget").querySelector("[data-import]")?.remove();
-      $("budget").value = "4";
-    }
-    note("Loading claim " + item.query_id + "…");
     const next =
       record?.query_id === item.query_id
         ? record
         : await getJSON("data/" + item.path);
-    const run = next.runs[$("policy").value + "-" + $("budget").value];
+    if (token !== request) return;
+    const run = next.runs[policy + "-" + budget];
     if (
       run.corpus_digest !== index.corpus_digest ||
       run.model_digest !== index.model_digest ||
       run.config.threshold !== index.threshold ||
+      run.config.policy !== policy ||
+      String(run.config.budget) !== budget ||
       run.claim !== item.claim ||
       next.query_id !== item.query_id
     )
       throw new Error("Claim or release identity mismatch.");
     await activate(bundleFor(run, next.sources, []), next, token);
   } catch (err) {
-    if (token === request) {
-      $("workspace").hidden = true;
-      $("save-json").disabled = true;
-      $("save-md").disabled = true;
-      note("Could not open this recorded run. " + err.message, true);
-    }
+    await restoreActive(
+      token,
+      "Could not open this recorded run. " + err.message,
+    );
   }
 }
 $("claim").addEventListener("change", loadClaim);
@@ -514,7 +551,7 @@ $("import-file").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  const token = ++request;
+  const token = beginRequest("Checking imported run…");
   try {
     if (file.size > MAX_BYTES)
       throw new Error("Choose a JSON file up to 5 MiB.");
@@ -523,23 +560,28 @@ $("import-file").addEventListener("change", async (e) => {
     );
     await activate(parseBundle(raw), null, token);
   } catch (err) {
-    if (token === request) note("Import failed. " + err.message, true);
+    await restoreActive(token, "Import failed. " + err.message);
   }
 });
-$("save-json").addEventListener("click", () =>
+$("save-json").addEventListener("click", () => {
+  if ($("save-json").disabled) return;
   exportFile(
     JSON.stringify(currentBundle()),
     "agentresearch-run.json",
     "application/json",
-  ),
-);
-$("save-md").addEventListener("click", async () =>
-  exportFile(
-    await markdown(currentBundle()),
-    "agentresearch-report.md",
-    "text/markdown;charset=utf-8",
-  ),
-);
+  );
+});
+$("save-md").addEventListener("click", async () => {
+  if ($("save-md").disabled) return;
+  const token = request,
+    report = await markdown(currentBundle());
+  if (token === request)
+    exportFile(
+      report,
+      "agentresearch-report.md",
+      "text/markdown;charset=utf-8",
+    );
+});
 
 function table(headers, rows) {
   const outer = el("div", undefined, "table-wrap");
