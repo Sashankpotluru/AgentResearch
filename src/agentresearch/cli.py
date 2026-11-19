@@ -50,17 +50,24 @@ def _pubmed(args):
     _emit(fetch_corpus(args.query, args.max_records, args.email).to_dict())
 
 
-def _runtime(args):
-    from .model import NeuralVerifier, ScoreCache
-
-    if args.cache and ":memory:" not in (args.cache, args.db):
-        checkpoint, score_cache = Path(args.db).resolve(), Path(args.cache).resolve()
+def _check_database_paths(checkpoint_name, cache_name):
+    if cache_name and ":memory:" not in (cache_name, checkpoint_name):
+        checkpoint, score_cache = (
+            Path(checkpoint_name).resolve(),
+            Path(cache_name).resolve(),
+        )
         if checkpoint == score_cache or (
             checkpoint.exists()
             and score_cache.exists()
             and checkpoint.samefile(score_cache)
         ):
             raise ValueError("--db and --cache must use different SQLite files")
+
+
+def _runtime(args):
+    from .model import NeuralVerifier, ScoreCache
+
+    _check_database_paths(args.db, args.cache)
     corpus = read_corpus(args.corpus)
     index = BM25Index(corpus)
 
@@ -73,6 +80,8 @@ def _runtime(args):
     @contextmanager
     def investigator():
         with RunStore(args.db) as store:
+            # Opening the checkpoint can make a previously absent filesystem alias visible.
+            _check_database_paths(args.db, args.cache)
             neural = network()
             if args.cache:
                 with ScoreCache(args.cache, neural) as verifier:

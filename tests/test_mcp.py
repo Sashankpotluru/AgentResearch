@@ -178,3 +178,59 @@ def test_cli_rejects_equivalent_checkpoint_and_cache_before_start(
         )
     assert error.value.code == 2 and "different" in capsys.readouterr().err
     assert not checkpoint.exists() or checkpoint.stat().st_size == 0
+
+
+def test_prospective_mixed_case_database_paths_follow_volume_semantics(
+    tmp_path, monkeypatch, capsys
+):
+    from agentresearch import cli, model
+    from agentresearch.schema import ScoredSpan
+
+    (tmp_path / "CaseProbe").touch()
+    aliases = (tmp_path / "caseprobe").exists()
+    checkpoint, cache_path = tmp_path / "Ledger.db", tmp_path / "ledger.db"
+    assert not checkpoint.exists() and not cache_path.exists()
+
+    class LocalVerifier:
+        model_digest = "fixture"
+
+        def __init__(self, corpus, *_):
+            if aliases:
+                pytest.fail(
+                    "loaded the model after SQLite created a case-insensitive alias"
+                )
+            self.corpus = corpus
+
+        def verify(self, claim, spans):
+            return tuple(ScoredSpan(s, 1, 999998, 1, self.model_digest) for s in spans)
+
+    monkeypatch.setattr(model, "NeuralVerifier", LocalVerifier)
+    args = [
+        "run",
+        "--db",
+        str(checkpoint),
+        "--cache",
+        str(cache_path),
+        "--corpus",
+        str(Path(__file__).parent / "fixtures/core.json"),
+        "--model-dir",
+        str(tmp_path),
+        "--claim",
+        "ice",
+        "--budget",
+        "1",
+        "--policy",
+        "fixed",
+        "--threshold",
+        "800000",
+    ]
+    if aliases:
+        with pytest.raises(SystemExit) as error:
+            cli.main(args)
+        assert error.value.code == 2 and "different" in capsys.readouterr().err
+    else:
+        cli.main(args)
+        assert json.loads(capsys.readouterr().out)["status"] == "complete"
+        assert not checkpoint.samefile(cache_path)
+        with sqlite3.connect(cache_path) as cache_db:
+            assert cache_db.execute("SELECT COUNT(*) FROM scores").fetchone() == (2,)
