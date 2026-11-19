@@ -184,7 +184,7 @@
     "coverage": "Final verdict other than ABSTAIN, including INSUFFICIENT.",
     "risk": "Conditional error over covered rows, null when zero covered.",
     "macro_f1": "Unweighted mean over frozen gold classes. Undefined class F1 is zero. Extra verdicts are errors.",
-    "evidence": "Micro-recall of positive annotated sentence IDs retained in scored spans. Complete rationale rate is the fraction of eligible queries retaining every sentence of at least one positive rationale. Climate positives are individual annotated candidates.",
+    "evidence": "Micro-recall of positive annotated sentence IDs whose entire non-whitespace sentence text is retained in scored spans. A truncated prefix with missing non-whitespace text does not count. Complete rationale rate is the fraction of eligible queries retaining every sentence of at least one positive rationale. Climate positives are individual annotated candidates.",
     "quote_integrity": "Fraction of retained scored spans bound to the exact source slice. This checks literal identity.",
     "uncertainty": {
       "draws": 2000,
