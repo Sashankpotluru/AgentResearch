@@ -6,6 +6,7 @@ import sqlite3
 import sys
 from contextlib import contextmanager
 from functools import cache
+from pathlib import Path
 
 from .data import acquire, pin_path, prepare, read_corpus
 from .engine import Investigator
@@ -52,6 +53,14 @@ def _pubmed(args):
 def _runtime(args):
     from .model import NeuralVerifier, ScoreCache
 
+    if args.cache and ":memory:" not in (args.cache, args.db):
+        checkpoint, score_cache = Path(args.db).resolve(), Path(args.cache).resolve()
+        if checkpoint == score_cache or (
+            checkpoint.exists()
+            and score_cache.exists()
+            and checkpoint.samefile(score_cache)
+        ):
+            raise ValueError("--db and --cache must use different SQLite files")
     corpus = read_corpus(args.corpus)
     index = BM25Index(corpus)
 

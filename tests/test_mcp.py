@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -99,6 +100,8 @@ def test_cli_run_resume_report_audit_with_prepared_jsonl(tmp_path, monkeypatch, 
         "--db",
         str(tmp_path / "runs.db"),
     ]
+    cache_path = tmp_path / "scores.db"
+    args.extend(["--cache", str(cache_path)])
     cli.main(
         [
             "run",
@@ -120,9 +123,58 @@ def test_cli_run_resume_report_audit_with_prepared_jsonl(tmp_path, monkeypatch, 
     cli.main(["resume", *args, "--run-id", run["run_id"]])
     output = capsys.readouterr().out
     assert json.loads(output)["status"] == "complete"
+    with sqlite3.connect(cache_path) as cache:
+        assert cache.execute("SELECT count(*) FROM scores").fetchone() == (2,)
     path = tmp_path / "run.json"
     path.write_text(output)
     cli.main(["audit", str(path), str(corpus)])
     assert json.loads(capsys.readouterr().out)["valid"]
     cli.main(["report", str(path), str(corpus)])
     assert "SUPPORTS" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("alias", ["symlink-parent", "hard-link"])
+def test_cli_rejects_equivalent_checkpoint_and_cache_before_start(
+    alias, tmp_path, monkeypatch, capsys
+):
+    from agentresearch import cli, model
+
+    checkpoint = tmp_path / "runs.sqlite"
+    if alias == "symlink-parent":
+        directory_link = tmp_path / "linked"
+        directory_link.symlink_to(tmp_path, target_is_directory=True)
+        cache_path = directory_link / "runs.sqlite"
+    else:
+        checkpoint.touch()
+        cache_path = tmp_path / "alternate.sqlite"
+        cache_path.hardlink_to(checkpoint)
+
+    def unexpected_model_load(*args):
+        pytest.fail("loaded the model before checking database paths")
+
+    monkeypatch.setattr(model, "NeuralVerifier", unexpected_model_load)
+    corpus = Path(__file__).parent / "fixtures/core.json"
+    with pytest.raises(SystemExit) as error:
+        cli.main(
+            [
+                "run",
+                "--db",
+                str(checkpoint),
+                "--cache",
+                str(cache_path),
+                "--corpus",
+                str(corpus),
+                "--model-dir",
+                str(tmp_path),
+                "--claim",
+                "ice",
+                "--budget",
+                "1",
+                "--policy",
+                "fixed",
+                "--threshold",
+                "800000",
+            ]
+        )
+    assert error.value.code == 2 and "different" in capsys.readouterr().err
+    assert not checkpoint.exists() or checkpoint.stat().st_size == 0

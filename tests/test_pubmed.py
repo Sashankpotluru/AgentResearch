@@ -1,5 +1,6 @@
 import io
 import json
+from http.client import IncompleteRead
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
@@ -25,6 +26,8 @@ def http_mocks(monkeypatch, responses):
         response = responses[len(urls) - 1]
         if isinstance(response, Exception):
             raise response
+        if isinstance(response, io.BytesIO):
+            return response
         return io.BytesIO(response)
 
     monkeypatch.setattr(pubmed, "_open", open_request)
@@ -99,3 +102,26 @@ def test_rejects_malformed_oversized_and_unrequested_responses(monkeypatch, resp
     http_mocks(monkeypatch, responses)
     with pytest.raises(ValueError):
         fetch_corpus("leaves", 1)
+
+
+class InterruptedTransfer(io.BytesIO):
+    def read(self, size):
+        raise IncompleteRead(b"partial", 25)
+
+
+def test_pubmed_retries_interrupted_read_then_recovers(monkeypatch):
+    from agentresearch.pubmed import fetch_corpus
+
+    urls, _ = http_mocks(monkeypatch, [search("123"), InterruptedTransfer(), XML])
+    assert fetch_corpus("leaves").sources[0].source_id == "pubmed:123"
+    assert len(urls) == 3 and urls[1] == urls[2]
+
+
+def test_pubmed_interrupted_read_exhausts_budget_and_exits_cleanly(monkeypatch, capsys):
+    from agentresearch.cli import main
+
+    urls, _ = http_mocks(monkeypatch, [InterruptedTransfer() for _ in range(3)])
+    with pytest.raises(SystemExit) as error:
+        main(["pubmed", "--query", "leaves"])
+    assert error.value.code == 2 and len(urls) == 3
+    assert "after three attempts" in capsys.readouterr().err

@@ -5,6 +5,7 @@ import re
 import ssl
 import threading
 import time
+from http.client import IncompleteRead
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
@@ -59,7 +60,7 @@ def _request(endpoint, params):
             exc.close()
             if attempt == 2 or exc.code not in (408, 429, 500, 502, 503, 504):
                 raise ValueError(f"PubMed returned HTTP {exc.code}") from None
-        except (URLError, TimeoutError, ConnectionError) as exc:
+        except (URLError, TimeoutError, ConnectionError, IncompleteRead) as exc:
             if attempt == 2:
                 raise ValueError(
                     "PubMed connection failed after three attempts"
