@@ -34,6 +34,7 @@ class Element {
     if (!this.value) this.value = option.value;
   }
   setAttribute() {}
+  focus() {}
   addEventListener(name, handler) {
     this.listeners.set(name, handler);
   }
@@ -189,4 +190,42 @@ test("failed import during a claim fetch restores one coherent selectable and ex
   }
   assert.equal(d.get("claim").value, original.query_id);
   assert.equal(await d.exportedClaim(), original.claim);
+});
+
+test("trace rail and step navigation display the active run's recorded search, read and score", async (t) => {
+  const d = await desk(t);
+  const { events } = JSON.parse(
+    readFileSync(new URL("data/" + original.path, site)),
+  ).runs["challenge-4"];
+  const paper = d.get("paper");
+  function descendants(node) {
+    return [node, ...node.children.flatMap(descendants)];
+  }
+  const rail = (i) =>
+    d.get("steps").children.find((b) => b.dataset.step === String(i));
+  const nav = (name) =>
+    descendants(paper).find(
+      (n) => n.tag === "button" && n.textContent === name,
+    );
+  async function checkStep(i, title, content) {
+    const expected =
+      "Recorded tool step " + events[i].sequence + " of " + events.length;
+    await until(() => paper.children.some((n) => n.textContent === expected));
+    assert.equal(paper.children.find((n) => n.tag === "h3").textContent, title);
+    assert.ok(descendants(paper).some((n) => n.textContent === content));
+  }
+  rail(0).click();
+  await checkStep(0, "Search the corpus", events[0].output[0].snippet);
+  nav("Next step").click();
+  await checkStep(1, "Read source sentences", events[1].output[0].quote);
+  rail(2).click();
+  await checkStep(2, "Score the excerpts", events[2].output[0].span.quote);
+  nav("Previous").click();
+  await checkStep(1, "Read source sentences", events[1].output[0].quote);
+  rail(-1).click();
+  await until(() =>
+    paper.children.some(
+      (n) => n.tag === "h3" && n.textContent === original.claim,
+    ),
+  );
 });

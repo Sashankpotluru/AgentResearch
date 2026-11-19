@@ -415,7 +415,7 @@ function drawAssessment(current, focus, announce) {
   drawDrawer(current);
   $("paper").replaceChildren();
   if (selected < 0) showSummary(current);
-  else showStep(active.run.events[selected]);
+  else showStep(bundle.run.events[selected]);
   if (focus?.source)
     [...$("drawer-sources").querySelectorAll("button")]
       .find((b) => b.dataset.source === focus.source)
