@@ -39,3 +39,17 @@ def test_import_rejects_duplicate_keys_invalid_offsets_and_oversize(tmp_path):
     raw["sources"][0]["sentences"][1]["start"] = False
     with pytest.raises(ValueError):
         Corpus.from_dict(raw)
+
+
+def test_import_rejects_whitespace_only_sentence_among_valid_sentences():
+    from agentresearch.schema import Corpus, load_json
+
+    raw = load_json(FIXTURE)
+    source = raw["sources"][0]
+    start = len(source["text"])
+    source["text"] += "\t\u2003"
+    source["sentences"].append(
+        {"sentence_id": "blank", "start": start, "end": start + 2}
+    )
+    with pytest.raises(ValueError, match="whitespace"):
+        Corpus.from_dict(raw)

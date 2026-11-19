@@ -143,6 +143,8 @@ class Source(Record):
                 or not last_end <= sent.start < sent.end <= len(self.text)
             ):
                 raise ValueError("duplicate, overlapping, or out-of-range sentence")
+            if not self.text[sent.start : sent.end].strip():
+                raise ValueError("whitespace-only sentence")
             seen.add(sent.sentence_id)
             last_end = sent.end
 

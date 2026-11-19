@@ -5,7 +5,7 @@ import re
 
 from .engine import append_event, new_run, next_action
 from .retrieval import BM25Index
-from .schema import RunConfig, canonical_bytes, integer, keys, string
+from .schema import RunConfig, canonical_bytes, digest, integer, keys, string
 from .tools import validate_output
 
 
@@ -66,6 +66,21 @@ def _label(value):
     return _md(" ".join(value.splitlines()))
 
 
+def _decision_text(decision, labels):
+    verdict = decision["verdict"]
+    if not decision["witnesses"]:
+        return f"**{verdict}**. No witnesses."
+    roles = ("support", "refutation")
+    if len(decision["witnesses"]) == 1:
+        roles = ("refutation",) if verdict == "REFUTES" else ("support",)
+    witnesses = []
+    for role, span_id in zip(roles, decision["witnesses"], strict=True):
+        label = labels[span_id]
+        witnesses.append(f'{role} [{label}](#{label.lower()} "{span_id}")')
+    conflict = " Internal conflict." if decision["internal_conflict"] else ""
+    return f"**{verdict}**.{conflict} Witnesses ({', '.join(witnesses)})."
+
+
 def to_markdown(run, corpus):
     validate_run(run, corpus)
     lines = [
@@ -76,29 +91,37 @@ def to_markdown(run, corpus):
         f"Run {_label(run['run_id'])}",
         "",
     ]
+    labels = {digest(row["span"]): f"E{i}" for i, row in enumerate(run["scores"], 1)}
     assessment = run["assessment"]
     if assessment is None:
         lines.append(f"**Incomplete investigation ({run['status']}).**")
     else:
         lines.extend(
             [
-                f"**{assessment['final']['verdict']}**",
+                f"Final assessment {_decision_text(assessment['final'], labels)}",
                 "",
-                f"Base assessment {assessment['base']['verdict']}.",
+                f"Base assessment {_decision_text(assessment['base'], labels)}",
                 "",
                 "## Source withdrawal",
                 "",
             ]
         )
         for sid, outcome in assessment["withdrawals"].items():
-            lines.append(f"- Removing {_label(sid)} gives {outcome['verdict']}.")
+            lines.append(
+                f"- Removing {_label(sid)} gives {_decision_text(outcome, labels)}"
+            )
     lines.extend(["", "## Evidence", ""])
     for r in run["scores"]:
         s = r["span"]
+        span_id = digest(s)
         source = corpus.by_id[s["source_id"]]
         lines.extend(
             [
-                f"### {_label(source.title)}",
+                f"### {labels[span_id]}",
+                "",
+                f"**{_label(source.title)}**",
+                "",
+                f"Span ID `{span_id}`",
                 "",
                 (
                     f"Source {_label(source.source_id)}, sentence {_label(s['sentence_id'])}, "

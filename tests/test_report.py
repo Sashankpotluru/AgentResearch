@@ -101,3 +101,56 @@ def test_report_incomplete_and_cli(tmp_path):
         )
         assert out.returncode == 0, out.stderr
         assert ("running" if command == "audit" else "incomplete") in out.stdout.lower()
+
+
+def test_report_identifies_conflict_and_replacement_witnesses():
+    from test_engine import components, config
+
+    from agentresearch.engine import Investigator
+    from agentresearch.report import to_markdown
+    from agentresearch.schema import ScoredSpan, digest
+    from agentresearch.store import RunStore
+
+    tools = components()
+
+    def verify(claim, spans):
+        rows = []
+        for s in spans:
+            c, e = {
+                ("a", "0"): (0, 980000),
+                ("a", "1"): (970000, 0),
+                ("b", "0"): (0, 940000),
+            }.get((s.source_id, s.sentence_id), (0, 0))
+            rows.append(ScoredSpan(s, c, e, 1000000 - c - e, "fixture"))
+        return tuple(rows)
+
+    tools.verifier.verify = verify
+    with RunStore(":memory:") as store:
+        run = Investigator(tools, store).run("sea ice", config("guarded"))
+    markdown = to_markdown(run, tools.corpus)
+    lines = markdown.splitlines()
+    evidence = {}
+    for number, row in enumerate(run["scores"], 1):
+        s = row["span"]
+        span_id = digest(s)
+        label = f"E{number}"
+        evidence[s["source_id"], s["sentence_id"]] = (
+            f'[{label}](#{label.lower()} "{span_id}")'
+        )
+        assert f"### {label}" in lines
+        assert f"Span ID `{span_id}`" in lines
+
+    def assessment_line(prefix):
+        return next(line for line in lines if line.startswith(prefix))
+
+    base = assessment_line("Base assessment")
+    assert (
+        "CONFLICT" in base and evidence["b", "0"] in base and evidence["a", "1"] in base
+    )
+    final = assessment_line("Final assessment")
+    assert "ABSTAIN" in final and "No witnesses" in final
+    removed_b = assessment_line("- Removing b ")
+    assert "INSUFFICIENT" in removed_b and "Internal conflict" in removed_b
+    assert evidence["a", "0"] in removed_b and evidence["a", "1"] in removed_b
+    removed_a = assessment_line("- Removing a ")
+    assert "SUPPORTS" in removed_a and evidence["b", "0"] in removed_a
