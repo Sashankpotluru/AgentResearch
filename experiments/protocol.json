@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "datasets": {
+    "climate": {
+      "corpus_digest": "f3b73a64dfd7e1e5cb19beb0a6aaadd85ee62f094849cfa45d79e35048902467",
+      "corpus_sha256": "19f2bcca6ffd4f63efde3eb60e2019272d2cfddc0b5c9be4fd673bbf9da06224",
+      "sentences": 5240,
+      "sources": 1344,
+      "splits": {
+        "test": {
+          "clusters": 410,
+          "labels": {
+            "CONFLICT": 154,
+            "INSUFFICIENT": 474,
+            "REFUTES": 253,
+            "SUPPORTS": 654
+          },
+          "largest_cluster": 1040,
+          "queries": 1535,
+          "sha256": "69d619e88e858692a1582c77a10bc4cafea3a91feb957e59ff12323bc55bbd36"
+        }
+      }
+    },
+    "scifact": {
+      "corpus_digest": "9c9535170f02880f58bb9cd1c60ee789477c798bac440fcf83af36e3c6518f32",
+      "corpus_sha256": "c781854f725250320800b1d8fc0318ddd38d843117df405c28cf2305c0984b82",
+      "sentences": 45952,
+      "sources": 5183,
+      "splits": {
+        "calibration": {
+          "clusters": 328,
+          "labels": {
+            "INSUFFICIENT": 216,
+            "REFUTES": 102,
+            "SUPPORTS": 219
+          },
+          "largest_cluster": 5,
+          "queries": 537,
+          "sha256": "c6c722e18c54cb316255fc052425eb1421c8878a09167e29e06227a34b6ac93f"
+        },
+        "dev": {
+          "clusters": 247,
+          "labels": {
+            "INSUFFICIENT": 112,
+            "REFUTES": 64,
+            "SUPPORTS": 124
+          },
+          "largest_cluster": 4,
+          "queries": 300,
+          "sha256": "a6994b8eb31dd53ac7b8866fce3a700fbe66a4608f085fc073851421f93ef794"
+        },
+        "train": {
+          "clusters": 490,
+          "labels": {
+            "INSUFFICIENT": 304,
+            "REFUTES": 173,
+            "SUPPORTS": 332
+          },
+          "largest_cluster": 8,
+          "queries": 809,
+          "sha256": "3048acf0da7d6e7b7e7f8b5783beff74a28935748326715d8e523281c0597b70"
+        }
+      }
+    }
+  },
+  "sources": {
+    "climate-fever.jsonl": {
+      "bytes": 3152039,
+      "sha256": "8a4b9032d861be482ffb49dddfd283ffa6089e654f1e968040011882c5eb6e0b",
+      "url": "https://raw.githubusercontent.com/tdiggelm/climate-fever-dataset/03de61617b10a5c1935f8e08bb0e8ac1ee775356/dataset/climate-fever.jsonl"
+    },
+    "scifact.tar.gz": {
+      "bytes": 3115079,
+      "sha256": "11c621288d41ac144d29b13b0f8503b3820b7d6e8b1f6ff24dff335c196d76be",
+      "url": "https://scifact.s3-us-west-2.amazonaws.com/release/latest/data.tar.gz"
+    }
+  },
+  "model": {
+    "id": "cross-encoder/nli-deberta-v3-small",
+    "revision": "fa2804872c3b4bd748f38c0185cc85775361e735",
+    "lock_sha256": "7c8b15cd4424951bfe4016fecbf1c096acd9f67bb13663387f18b940f0da3f88",
+    "score_order": [
+      "contradiction",
+      "entailment",
+      "neutral"
+    ],
+    "scale": 1000000,
+    "maximum_tokens": 512
+  },
+  "classes": [
+    "SUPPORTS",
+    "REFUTES",
+    "INSUFFICIENT",
+    "CONFLICT",
+    "ABSTAIN"
+  ],
+  "gold_classes": {
+    "scifact": [
+      0,
+      1,
+      2
+    ],
+    "climate": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "policies": [
+    "fixed",
+    "first_hit",
+    "challenge",
+    "guarded"
+  ],
+  "budgets": [
+    4,
+    8
+  ],
+  "retrieval": {
+    "method": "BM25",
+    "k1": 1.2,
+    "b": 0.75,
+    "title_copies": 2,
+    "search_limit": 12,
+    "sentences_per_read": 2,
+    "initial_reads": 3,
+    "focus_terms": 4,
+    "challenge_boost": 0.25,
+    "max_cues": 3,
+    "cues": [
+      "no",
+      "not",
+      "never",
+      "however",
+      "despite",
+      "failed",
+      "lack",
+      "without"
+    ]
+  },
+  "policy_rules": {
+    "fixed": "Read relevance ranking to budget or exhaustion.",
+    "first_hit": "Stop fixed acquisition after the first non-insufficient base verdict.",
+    "challenge": "After three reads or initial exhaustion, perform one secondary search if budget remains. Use focus when provisionally insufficient, otherwise challenge. Consume unseen secondary candidates then unseen initial candidates.",
+    "guarded": "Use challenge acquisition and abstain if any single-source withdrawal changes the base verdict."
+  },
+  "calibration": {
+    "dataset": "scifact",
+    "split": "calibration",
+    "policy": "fixed",
+    "budget": 8,
+    "grid": [
+      600000,
+      700000,
+      800000,
+      900000
+    ],
+    "criterion": "maximum three-class macro F1",
+    "tie": "higher threshold",
+    "train_exclusions": "Exclude all training claims sharing a cited document with any dev claim.",
+    "freeze": "Commit the chosen threshold and selection artifact before computing held-out quality."
+  },
+  "evaluation": {
+    "splits": {
+      "scifact": "dev",
+      "climate": "test"
+    },
+    "primary": [
+      "challenge",
+      8,
+      "fixed",
+      8
+    ],
+    "selectivity": [
+      "guarded",
+      "challenge"
+    ],
+    "early_stopping": [
+      "first_hit",
+      "fixed"
+    ],
+    "sensitivity_budget": 4,
+    "coverage": "Final verdict other than ABSTAIN, including INSUFFICIENT.",
+    "risk": "Conditional error over covered rows, null when zero covered.",
+    "macro_f1": "Unweighted mean over frozen gold classes. Undefined class F1 is zero. Extra verdicts are errors.",
+    "evidence": "Micro-recall of positive annotated sentence IDs retained in scored spans. Complete rationale rate is the fraction of eligible queries retaining every sentence of at least one positive rationale. Climate positives are individual annotated candidates.",
+    "quote_integrity": "Fraction of retained scored spans bound to the exact source slice. This checks literal identity.",
+    "uncertainty": {
+      "draws": 2000,
+      "seed": 17,
+      "generator": "NumPy PCG64 default_rng; integers over lexicographically sorted group IDs; sample the number of distinct groups with replacement; retain every row for each selected group with multiplicity",
+      "interval": "95% percentile, linear interpolation; omit draws with an undefined conditional risk and report their count",
+      "unit": "connected component",
+      "climate_sensitivity": "paired claim bootstrap",
+      "pairing": "same resamples for every policy, budget and difference within a dataset",
+      "statistics": [
+        "accuracy",
+        "macro_f1",
+        "coverage",
+        "risk",
+        "mean_reads",
+        "mean_nli_pairs"
+      ]
+    },
+    "demo": "First 40 dev query IDs ordered by SHA256 of the UTF-8 original ID, ascending.",
+    "release_failure": "Any failed, missing or duplicate run invalidates the release. Transient attempts capped at three. Complete denominator required."
+  }
+}
