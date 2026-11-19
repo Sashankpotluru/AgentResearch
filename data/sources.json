@@ -1,0 +1,12 @@
+{
+  "scifact.tar.gz": {
+    "url": "https://scifact.s3-us-west-2.amazonaws.com/release/latest/data.tar.gz",
+    "sha256": "11c621288d41ac144d29b13b0f8503b3820b7d6e8b1f6ff24dff335c196d76be",
+    "bytes": 3115079
+  },
+  "climate-fever.jsonl": {
+    "url": "https://raw.githubusercontent.com/tdiggelm/climate-fever-dataset/03de61617b10a5c1935f8e08bb0e8ac1ee775356/dataset/climate-fever.jsonl",
+    "sha256": "8a4b9032d861be482ffb49dddfd283ffa6089e654f1e968040011882c5eb6e0b",
+    "bytes": 3152039
+  }
+}
