@@ -112,9 +112,59 @@ def _runtime(args):
             )
 
 
+def _experiment(args):
+    from .experiment import calibrate, evaluate
+    from .verify import verify_results
+
+    if args.command == "verify":
+        _emit(verify_results(args.results, args.prepared, site_dir=args.site_dir))
+        return
+    options = {
+        "device": args.device,
+        "batch_size": args.batch_size,
+        "warm": not args.no_prefetch,
+    }
+    if args.command == "calibrate":
+        _emit(calibrate(args.prepared, args.model, args.cache, args.output, **options))
+    else:
+        _emit(
+            evaluate(
+                args.prepared,
+                args.model,
+                args.cache,
+                args.calibration,
+                args.output,
+                work_dir=args.work_dir,
+                site_dir=args.site_dir,
+                **options,
+            )
+        )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="agentresearch")
     commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("calibrate", "evaluate"):
+        command = commands.add_parser(
+            name, help="Run the frozen benchmark " + name + " stage"
+        )
+        for field in ("prepared", "model", "cache", "output"):
+            command.add_argument("--" + field, required=True)
+        command.add_argument("--device", choices=("cpu", "cuda", "mps"), default="cpu")
+        command.add_argument("--batch-size", type=int, default=16)
+        command.add_argument("--no-prefetch", action="store_true")
+        if name == "evaluate":
+            command.add_argument("--calibration", required=True)
+            command.add_argument("--work-dir", default=".artifacts/eval-work")
+            command.add_argument("--site-dir")
+        command.set_defaults(handler=_experiment)
+    verify = commands.add_parser(
+        "verify", help="Verify the published frozen evaluation"
+    )
+    verify.add_argument("--results", required=True)
+    verify.add_argument("--prepared")
+    verify.add_argument("--site-dir")
+    verify.set_defaults(handler=_experiment)
     for name, description in [
         ("audit", "Replay a trace against its corpus"),
         ("report", "Write a Markdown evidence report"),
