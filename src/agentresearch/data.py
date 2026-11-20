@@ -34,7 +34,9 @@ LABELS = {
 
 def pin_path(name):
     module = Path(__file__).resolve()
-    repo_directory = "experiments" if name == "protocol.json" else "data"
+    repo_directory = (
+        "experiments" if name in {"protocol.json", "cyber-protocol.json"} else "data"
+    )
     checkout = module.parents[2] / repo_directory / name
     if module.parents[1].name == "src" and checkout.is_file():
         return checkout

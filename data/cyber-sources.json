@@ -1,0 +1,32 @@
+[
+  {
+    "path": "attack.json",
+    "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/a8db2f52eb933c9c99060c123e088b3326d3a607/enterprise-attack/enterprise-attack.json",
+    "bytes": 55277605,
+    "sha256": "539a843a7b53ed9749740b2123dddae3726b1a4831841c32aca740b011b910b5"
+  },
+  {
+    "path": "attack-license.txt",
+    "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/a8db2f52eb933c9c99060c123e088b3326d3a607/LICENSE.txt",
+    "bytes": 1354,
+    "sha256": "738144f7fb054722a4ef9d3367c51710341dc12fc574c6ac3a41daaaecd8bf5e"
+  },
+  {
+    "path": "tram.json",
+    "url": "https://raw.githubusercontent.com/center-for-threat-informed-defense/tram/f29793d8d665f7f552898696e00065ef24a29a20/data/tram2-data/multi_label.json",
+    "bytes": 5846167,
+    "sha256": "8a0c6644e4477eab28c92efd3bd7004b9563cb120ae1681d7d0a05dc170cd91b"
+  },
+  {
+    "path": "tram-license.txt",
+    "url": "https://raw.githubusercontent.com/center-for-threat-informed-defense/tram/f29793d8d665f7f552898696e00065ef24a29a20/LICENSE.txt",
+    "bytes": 11357,
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  {
+    "path": "tram-notice.txt",
+    "url": "https://raw.githubusercontent.com/center-for-threat-informed-defense/tram/f29793d8d665f7f552898696e00065ef24a29a20/NOTICE.txt",
+    "bytes": 749,
+    "sha256": "3b0fb65359098f6d7d302ef10f932345aa4a76e61fa5c22bb447cafb7a723ad0"
+  }
+]
