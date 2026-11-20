@@ -1,3 +1,4 @@
+import { renderEvaluation } from "./evaluation.js?v=cyber-v1";
 import { digest, viewAssessment } from "./decision.js";
 import {
   bundleFor,
@@ -9,12 +10,6 @@ import {
 } from "./import.js";
 
 const $ = (id) => document.getElementById(id);
-const policies = {
-  fixed: "Fixed",
-  first_hit: "First hit",
-  challenge: "Challenge",
-  guarded: "Guarded",
-};
 const verdicts = {
   SUPPORTS: "Supports",
   REFUTES: "Refutes",
@@ -22,13 +17,6 @@ const verdicts = {
   INSUFFICIENT: "Insufficient",
   ABSTAIN: "Abstain",
 };
-const labels = Object.keys({
-  SUPPORTS: 0,
-  REFUTES: 1,
-  INSUFFICIENT: 2,
-  CONFLICT: 3,
-  ABSTAIN: 4,
-});
 const toolNames = {
   search: "Search",
   read: "Read source",
@@ -42,7 +30,8 @@ let index,
   ids = [],
   request = 0,
   paint = 0,
-  summary;
+  summary,
+  desiredCase;
 const el = (tag, content, cls) => {
   const n = document.createElement(tag);
   if (content !== undefined) n.textContent = content;
@@ -68,7 +57,7 @@ function note(message = "", error = false) {
   $("status").classList.toggle("error", error);
 }
 async function getJSON(path) {
-  const res = await fetch(path);
+  const res = await fetch(path + "?v=cyber-v1");
   if (!res.ok)
     throw new Error("Could not load " + path + " (HTTP " + res.status + ").");
   return res.json();
@@ -99,156 +88,143 @@ function exportFile(body, name, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   $("exports").open = false;
 }
+function link(label, target) {
+  const url = safeUrl(target);
+  if (!url) return el("span", label);
+  const a = el("a", label);
+  a.href = url;
+  return a;
+}
 function scoreExcerpt(row) {
   const s = row.span,
     src = bundle.sources[s.source_id];
-  const article = el("div", undefined, "excerpt");
-  article.append(
-    el("p", sourceTitle(s.source_id), "source-line"),
-    el("blockquote", s.quote),
-  );
   const sent = src.sentences.find((x) => x.sentence_id === s.sentence_id);
-  const provenance =
-    s.source_id +
-    " · Sentence " +
-    s.sentence_id +
-    " · Characters [" +
-    s.start +
-    ", " +
-    s.end +
-    ")";
-  article.append(
-    el(
-      "p",
-      provenance +
-        (s.end < sent.end ? " · Scored prefix of the original sentence" : ""),
-      "locator",
-    ),
+  const article = el("div", undefined, "excerpt");
+  const quote = el("blockquote");
+  const markup = record && s.quote.match(/<code>[^<>]+<\/code>/g);
+  if (markup) {
+    for (const segment of s.quote.split(/(<code>[^<>]+<\/code>)/g)) {
+      if (segment.startsWith("<code>") && segment.endsWith("</code>"))
+        quote.append(el("code", segment.slice(6, -7)));
+      else quote.append(document.createTextNode(segment));
+    }
+  } else quote.textContent = s.quote;
+  const location = details(
+    "Score and source location",
     el(
       "p",
       "Entailment " +
-        row.entailment.toLocaleString("en-US") +
+        row.entailment +
         " · Contradiction " +
-        row.contradiction.toLocaleString("en-US") +
+        row.contradiction +
         " · Neutral " +
-        row.neutral.toLocaleString("en-US"),
-      "score-line",
+        row.neutral +
+        " (millionths).",
+    ),
+    el(
+      "p",
+      s.source_id +
+        " · Sentence " +
+        s.sentence_id +
+        " · Characters [" +
+        s.start +
+        ", " +
+        s.end +
+        ")" +
+        (s.end < sent.end ? " · Scored prefix" : ""),
+      "locator",
     ),
   );
-  const context = details(
-    "Original source text",
-    el("p", src.text, "context-text"),
-  );
-  const url = safeUrl(src.url);
-  if (url) {
-    const a = el("a", "Open source record ↗");
-    a.href = url;
-    context.append(a);
-  }
-  article.append(context);
+  if (markup)
+    location.append(
+      el("p", "Verbatim scored text"),
+      el("p", s.quote, "context-text"),
+    );
+  article.append(quote, location);
   return article;
+}
+function showHeader() {
+  $("case-title").textContent = record
+    ? record.family
+    : "Imported investigation";
+  const ctx = $("case-context");
+  ctx.replaceChildren();
+  if (record) {
+    const meta = el("div", undefined, "technique");
+    meta.append(
+      link(record.family_id, record.family_url),
+      el("span", " / "),
+      link(
+        record.technique_id + " · " + record.technique,
+        record.technique_url,
+      ),
+    );
+    ctx.append(meta);
+    // Keep the original catalogue description available for families with long entries.
+    const first =
+      record.description.match(/^.*?[.!?](?=\s|$)/u)?.[0] || record.description;
+    ctx.append(el("p", first, "family-description"));
+    if (first.length < record.description.length)
+      ctx.append(
+        details("Full ATT&CK description", el("p", record.description)),
+      );
+  }
+  ctx.append(el("p", bundle.run.claim, "claim"));
 }
 function showSummary(current) {
   const { run } = bundle,
-    p = $("paper"),
-    original = run.assessment?.final.verdict;
-  p.append(
+    panel = $("paper");
+  const line = el("div", undefined, "assessment");
+  line.append(
     el(
-      "div",
-      record
-        ? "SciFact / Development claim " + record.query_id
-        : "Imported investigation",
-      "record-label",
+      "h2",
+      run.status === "complete"
+        ? "Model assessment"
+        : "Provisional model assessment",
     ),
-    el("h3", run.claim),
-  );
-  const result = el("div", undefined, "assessment");
-  const prefix =
-    run.status === "complete" ? "Current verdict" : "Provisional verdict";
-  result.append(
-    el("strong", prefix),
     el(
-      "span",
+      "strong",
       verdicts[current.final.verdict],
       "outcome " + current.final.verdict.toLowerCase(),
     ),
   );
-  p.append(result);
-  const m =
-    (original
-      ? "Recorded verdict: " + verdicts[original]
-      : "Recorded status: " + run.status) +
-    (record ? " · Dataset label: " + verdicts[record.label] : "");
-  p.append(el("p", m, "annotation"));
-  let reason = current.stable
-    ? "Removing any one retained source leaves the base verdict unchanged."
-    : current.pivotal_sources.length +
-      " pivotal " +
-      (current.pivotal_sources.length === 1
-        ? "source changes"
-        : "sources change") +
-      " the base verdict when withdrawn individually.";
-  if (!Object.keys(current.withdrawals).length)
-    reason = "The current audit contains no scored sources.";
+  const original = run.assessment?.final.verdict;
+  let reason =
+    original && excluded.size
+      ? "Recorded: " +
+        verdicts[original] +
+        ". After withdrawal: " +
+        verdicts[current.final.verdict] +
+        ". "
+      : "";
+  const n = current.pivotal_sources.length;
+  if (Object.keys(current.withdrawals).length) {
+    reason += n
+      ? n +
+        (n === 1 ? " source changes" : " sources change") +
+        " the base assessment when withdrawn individually."
+      : "Withdrawing any one retained source leaves the base assessment unchanged.";
+  } else reason += "No scored sources remain in this view.";
   if (current.base.internal_conflict)
-    reason += " One source supplies opposing judgments.";
+    reason += " One source contains opposing model judgments.";
   if (current.final.verdict === "ABSTAIN")
     reason +=
-      " Guarded abstains from the base verdict of " +
+      " Guarded withheld the base assessment of " +
       verdicts[current.base.verdict].toLowerCase() +
       ".";
-  p.append(el("p", reason, "summary-line"));
-  const evidence = el("section", undefined, "evidence-section");
-  const witnessSet = new Set(current.base.witnesses);
-  const retained = run.scores.filter(
-    (row) => !excluded.has(row.span.source_id),
-  );
-  const witnesses = run.scores.filter(
-    (row, i) => witnessSet.has(ids[i]) && !excluded.has(row.span.source_id),
-  );
-  const leading = witnesses.length ? witnesses : retained.slice(0, 1);
-  evidence.append(
-    el("h4", witnesses.length ? "Verdict evidence" : "Recorded evidence"),
-  );
-  if (leading.length) {
-    evidence.append(
-      el(
-        "p",
-        "Exact scored excerpts. Model scores are uncalibrated millionths; the threshold is " +
-          run.config.threshold.toLocaleString("en-US") +
-          ".",
-        "meta",
-      ),
-    );
-    for (const row of leading) evidence.append(scoreExcerpt(row));
-    const rest = retained.filter((row) => !leading.includes(row));
-    if (rest.length)
-      evidence.append(
-        details(
-          "Other scored excerpts (" + rest.length + ")",
-          ...rest.map(scoreExcerpt),
-        ),
-      );
-  } else
-    evidence.append(
-      el(
-        "p",
-        "Restore a scored source to inspect its excerpts. The run trace retains the original tool outputs.",
-        "subtle",
-      ),
-    );
-  p.append(
-    evidence,
-    details(
-      "Recorded run identity",
-      el("p", "Run: " + run.run_id, "locator"),
-      el("p", "Corpus digest: " + run.corpus_digest, "locator"),
-      el("p", "Model identifier: " + run.model_digest, "locator"),
+  panel.replaceChildren(line, el("p", reason));
+  panel.append(
+    el(
+      "p",
+      record
+        ? "This model can mistake unrelated behavior for a contradiction. Review the cited text before interpreting its assessment."
+        : "This view replays the imported model scores at the run’s recorded threshold.",
+      "assessment-note",
     ),
   );
 }
 function showStep(e) {
-  const p = $("paper");
+  const p = $("step-detail");
   p.append(
     el(
       "div",
@@ -315,7 +291,11 @@ function showStep(e) {
         "meta",
       ),
     );
-    for (const row of e.output) p.append(scoreExcerpt(row));
+    for (const row of e.output)
+      p.append(
+        el("strong", sourceTitle(row.span.source_id)),
+        scoreExcerpt(row),
+      );
   }
   p.append(
     details(
@@ -328,7 +308,7 @@ function showStep(e) {
   nav.append(button("Previous", () => selectStep(selected - 1, true)));
   if (selected + 1 < bundle.run.events.length)
     nav.append(button("Next step", () => selectStep(selected + 1, true)));
-  else nav.append(button("View assessment", () => selectStep(-1, true)));
+  else nav.append(button("Run overview", () => selectStep(-1, true)));
   p.append(nav);
 }
 function selectStep(i, focus = false) {
@@ -339,7 +319,7 @@ function drawRail() {
   const { run } = bundle,
     steps = $("steps");
   steps.replaceChildren();
-  const overview = button("Assessment", () => selectStep(-1, true));
+  const overview = button("Overview", () => selectStep(-1, true));
   overview.dataset.step = "-1";
   overview.setAttribute("aria-current", String(selected === -1));
   steps.append(overview);
@@ -353,7 +333,8 @@ function drawRail() {
     );
     steps.append(b);
   }
-  $("rail-caption").textContent = run.events.length + " recorded steps";
+  $("rail-caption").textContent =
+    "Run trace · " + run.events.length + " recorded steps";
   const u = run.usage;
   $("cost").textContent =
     u.attempts.search +
@@ -365,43 +346,73 @@ function drawRail() {
     u.nli_pairs +
     " NLI pairs";
 }
-function drawDrawer(current) {
-  const list = $("drawer-sources"),
-    { run } = bundle,
-    counts = new Map();
+function drawSources(current) {
+  const list = $("source-list"),
+    groups = new Map(),
+    witnesses = new Set(current.base.witnesses);
+  for (const [i, row] of bundle.run.scores.entries()) {
+    const id = row.span.source_id;
+    if (!groups.has(id)) groups.set(id, { id, primary: [], other: [] });
+    groups.get(id)[witnesses.has(ids[i]) ? "primary" : "other"].push(row);
+  }
   list.replaceChildren();
-  for (const r of run.scores)
-    counts.set(r.span.source_id, (counts.get(r.span.source_id) || 0) + 1);
-  for (const [id, n] of counts) {
+  $("evidence-note").textContent =
+    groups.size +
+    " scored " +
+    (groups.size === 1 ? "source" : "sources") +
+    (record
+      ? ". Excerpts quote MITRE procedure summaries attributed to the publications below."
+      : ". Excerpts quote the supplied source texts.");
+  const ordered = [...groups.values()].sort(
+    (a, b) =>
+      Number(Boolean(b.primary.length)) - Number(Boolean(a.primary.length)),
+  );
+  for (const { id, primary, other } of ordered) {
     const off = excluded.has(id),
-      shelf = el("div", undefined, "drawer-shelf" + (off ? " excluded" : ""));
-    shelf.append(
-      el("span", sourceTitle(id), "source-name"),
-      el(
-        "span",
-        id + " · " + n + " scored " + (n === 1 ? "excerpt" : "excerpts"),
-        "drawer-meta",
-      ),
-    );
-    const actions = el("div", undefined, "drawer-actions");
+      src = bundle.sources[id];
+    const shelf = el("article", undefined, "source" + (off ? " excluded" : ""));
+    const head = el("div", undefined, "source-head");
     const toggle = button(off ? "Restore" : "Withdraw", () => {
       if (off) excluded.delete(id);
       else excluded.add(id);
-      selected = -1;
       render({ source: id }, true);
     });
     toggle.dataset.source = id;
-    toggle.setAttribute("aria-label", (off ? "Restore " : "Withdraw ") + id);
-    actions.append(toggle);
-    if (current.pivotal_sources.includes(id))
-      actions.append(el("span", "Pivotal", "pivotal"));
-    if (off) actions.append(el("small", "Excluded", "subtle"));
-    shelf.append(actions);
+    toggle.setAttribute(
+      "aria-label",
+      (off ? "Restore " : "Withdraw ") + sourceTitle(id),
+    );
+    head.append(el("h3", sourceTitle(id)), toggle);
+    shelf.append(head);
+    if (off)
+      shelf.append(
+        el("p", "Withdrawn from the current assessment.", "source-state"),
+      );
+    else {
+      if (current.pivotal_sources.includes(id))
+        shelf.append(
+          el("p", "Withdrawal changes the base assessment", "source-state"),
+        );
+      const rows = [...primary, ...other];
+      shelf.append(scoreExcerpt(rows[0]));
+      if (rows.length > 1)
+        shelf.append(
+          details(
+            "More scored excerpts (" + (rows.length - 1) + ")",
+            ...rows.slice(1).map(scoreExcerpt),
+          ),
+        );
+    }
+    const refs = el("div", undefined, "source-links");
+    if (safeUrl(src.url))
+      refs.append(
+        link(record ? "Open cited reference ↗" : "Source link ↗", src.url),
+      );
+    refs.append(details("Full source text", el("p", src.text, "context-text")));
+    shelf.append(refs);
     list.append(shelf);
   }
-  if (!counts.size)
-    list.append(el("p", "This run contains no scored sources.", "subtle"));
-  $("reset").disabled = excluded.size === 0;
+  $("reset").disabled = !excluded.size;
 }
 async function render(focus, announce = false) {
   const stamp = ++paint,
@@ -413,12 +424,22 @@ async function render(focus, announce = false) {
 }
 function drawAssessment(current, focus, announce) {
   drawRail();
-  drawDrawer(current);
-  $("paper").replaceChildren();
-  if (selected < 0) showSummary(current);
-  else showStep(bundle.run.events[selected]);
+  drawSources(current);
+  showSummary(current);
+  $("step-detail").replaceChildren();
+  if (selected < 0) {
+    const run = bundle.run;
+    $("step-detail").append(
+      details(
+        "Recorded run identity",
+        el("p", "Run: " + run.run_id, "locator"),
+        el("p", "Corpus digest: " + run.corpus_digest, "locator"),
+        el("p", "Model identifier: " + run.model_digest, "locator"),
+      ),
+    );
+  } else showStep(bundle.run.events[selected]);
   if (focus?.source)
-    [...$("drawer-sources").querySelectorAll("button")]
+    [...$("source-list").querySelectorAll("button")]
       .find((b) => b.dataset.source === focus.source)
       ?.focus();
   if (focus?.rail !== undefined)
@@ -433,7 +454,7 @@ function drawAssessment(current, focus, announce) {
       verdicts[current.final.verdict] +
       ". " +
       excluded.size +
-      " sources excluded.";
+      (excluded.size === 1 ? " source excluded." : " sources excluded.");
 }
 function setAvailable(ready) {
   $("workspace").hidden = !ready;
@@ -450,25 +471,58 @@ function beginRequest(message) {
   note(message);
   return ++request;
 }
+function refreshCases() {
+  const query = $("case-search").value.trim().toLowerCase();
+  const cases = (index?.claims || []).filter((c) =>
+    [c.family, c.family_id, c.technique, c.technique_id].some((v) =>
+      v.toLowerCase().includes(query),
+    ),
+  );
+  const list = $("case-list");
+  list.replaceChildren();
+  $("case-count").textContent = query
+    ? cases.length + " matching cases"
+    : cases.length + " saved cases";
+  for (const c of cases) {
+    const row = button(
+      "",
+      () => {
+        desiredCase = c.query_id;
+        if (!record && bundle) {
+          $("policy").value = "challenge";
+          $("budget").value = "4";
+        }
+        return loadClaim("case-title");
+      },
+      "case-row",
+    );
+    row.dataset.case = c.query_id;
+    row.setAttribute("aria-current", String(c.query_id === record?.query_id));
+    row.append(
+      el("strong", c.family),
+      el("span", c.technique_id),
+      el("small", c.technique),
+    );
+    list.append(row);
+  }
+  if (!cases.length)
+    list.append(el("p", "Try another family name or technique ID.", "empty"));
+}
 function syncSelectors() {
   const imported = !record;
-  $("claim").querySelector('option[value="import"]')?.remove();
+  desiredCase = record?.query_id;
   $("budget").querySelector("[data-import]")?.remove();
-  if (imported) {
-    $("claim").add(option("import", "Imported · " + bundle.run.claim));
-    if (![4, 8].includes(bundle.run.config.budget)) {
-      const budget = String(bundle.run.config.budget);
-      const extra = option(budget, budget + " sources");
-      extra.dataset.import = "";
-      $("budget").add(extra);
-    }
+  if (imported && ![4, 8].includes(bundle.run.config.budget)) {
+    const budget = String(bundle.run.config.budget);
+    const extra = option(budget, budget + " sources");
+    extra.dataset.import = "";
+    $("budget").add(extra);
   }
-  $("claim").value = imported ? "import" : record.query_id;
   $("policy").value = bundle.run.config.policy;
   $("budget").value = String(bundle.run.config.budget);
   $("policy").disabled = imported;
   $("budget").disabled = imported;
-  $("claim").disabled = !index;
+  refreshCases();
 }
 async function restoreActive(token, message, error = true) {
   if (token !== request) return;
@@ -496,24 +550,16 @@ async function activate(candidate, claimRecord, token) {
   excluded = new Set(candidate.view.excluded_source_ids);
   selected = -1;
   syncSelectors();
+  showHeader();
+  $("trace").open = false;
   drawAssessment(current, null, true);
   setAvailable(true);
   note(record ? "" : "Imported run checked against its supplied sources.");
 }
-async function loadClaim() {
-  const id = $("claim").value;
-  if (id === "import" && bundle && !record) {
-    await restoreActive(
-      beginRequest("Opening imported run…"),
-      "Imported run checked against its supplied sources.",
-      false,
-    );
-    return;
-  }
-  const item = index?.claims.find((c) => c.query_id === id);
+async function loadClaim(focusId = null) {
+  const item = index?.claims.find((c) => c.query_id === desiredCase);
   if (!item) return;
   const token = beginRequest("Loading claim " + item.query_id + "…");
-  if (!record && bundle) $("budget").value = "4";
   const policy = $("policy").value,
     budget = $("budget").value;
   try {
@@ -530,10 +576,16 @@ async function loadClaim() {
       run.config.policy !== policy ||
       String(run.config.budget) !== budget ||
       run.claim !== item.claim ||
+      next.family !== item.family ||
+      next.technique_id !== item.technique_id ||
       next.query_id !== item.query_id
     )
       throw new Error("Claim or release identity mismatch.");
     await activate(bundleFor(run, next.sources, []), next, token);
+    if (focusId && token === request) {
+      if (focusId === "case-title" && narrow.matches) $("chooser").open = false;
+      $(focusId).focus();
+    }
   } catch (err) {
     await restoreActive(
       token,
@@ -541,13 +593,13 @@ async function loadClaim() {
     );
   }
 }
-$("claim").addEventListener("change", loadClaim);
-$("policy").addEventListener("change", loadClaim);
-$("budget").addEventListener("change", loadClaim);
+$("case-search").addEventListener("input", refreshCases);
+$("policy").addEventListener("change", () => loadClaim("policy"));
+$("budget").addEventListener("change", () => loadClaim("budget"));
 $("reset").addEventListener("click", () => {
   excluded.clear();
   selected = -1;
-  render({ rail: -1 }, true);
+  render(null, true);
 });
 $("import-button").addEventListener("click", () => $("import-file").click());
 $("import-file").addEventListener("change", async (e) => {
@@ -586,208 +638,56 @@ $("save-md").addEventListener("click", async () => {
     );
 });
 
-function table(headers, rows) {
-  const outer = el("div", undefined, "table-wrap");
-  outer.tabIndex = 0;
-  outer.setAttribute("role", "region");
-  outer.setAttribute("aria-label", headers.join(", "));
-  const t = el("table"),
-    head = el("thead"),
-    body = el("tbody"),
-    tr = el("tr");
-  for (const h of headers) {
-    const cell = el("th", h);
-    cell.scope = "col";
-    tr.append(cell);
-  }
-  head.append(tr);
-  t.append(head, body);
-  for (const row of rows) {
-    const tr = el("tr");
-    row.forEach((v, i) => {
-      const cell = el(i ? "td" : "th", v);
-      if (!i) cell.scope = "row";
-      tr.append(cell);
-    });
-    body.append(tr);
-  }
-  outer.append(t);
-  return outer;
+const narrow = window.matchMedia("(max-width: 740px)");
+function sizeChooser() {
+  $("chooser").open = !narrow.matches;
 }
-const pct = (n) => (n === null ? "Undefined" : (n * 100).toFixed(1) + "%");
-const pp = (n) =>
-  n === null ? "Undefined" : (n > 0 ? "+" : "") + (n * 100).toFixed(2);
-function showResults() {
-  if (!summary) return;
-  const key = $("dataset").value,
-    b = $("result-budget").value,
-    ds = summary.datasets[key],
-    box = $("results");
-  box.replaceChildren();
-  box.append(
-    el(
-      "p",
-      ds.queries.toLocaleString("en-US") +
-        " held-out claims · " +
-        ds.clusters +
-        " evidence-sharing components · Threshold " +
-        summary.threshold.toLocaleString("en-US") +
-        " millionths",
-      "meta",
-    ),
-  );
-  const main = Object.entries(policies).map(([key, name]) => {
-    const v = ds.configs[key + "-" + b];
-    return [
-      name,
-      pct(v.accuracy),
-      v.macro_f1.toFixed(3),
-      pct(v.coverage),
-      pct(v.risk),
-      v.mean_reads.toFixed(2),
-      v.mean_nli_pairs.toFixed(2),
-    ];
-  });
-  box.append(
-    table(
-      [
-        "Policy",
-        "Accuracy",
-        "Macro F1",
-        "Coverage",
-        "Error if covered",
-        "Mean reads",
-        "Mean NLI pairs",
-      ],
-      main,
-    ),
-    el(
-      "p",
-      "Coverage includes insufficient-evidence decisions. Conditional error counts mistakes among covered claims. Reads and sentence pairs are logical costs per claim.",
-      "results-note",
-    ),
-  );
-  const contrast = ds.contrasts["challenge-" + b + "_minus_fixed-" + b];
-  const diff = contrast.difference.macro_f1;
-  box.append(
-    el("h3", "Challenge versus fixed"),
-    el(
-      "p",
-      "At this budget, challenge " +
-        (diff < 0
-          ? "scored lower than"
-          : diff > 0
-            ? "scored higher than"
-            : "tied") +
-        " fixed on macro F1. Differences below are percentage points with paired 95% bootstrap intervals.",
-      "results-note",
-    ),
-  );
-  const comparisons = [];
-  for (const [key, method] of Object.entries(contrast.intervals)) {
-    for (const [k, name] of [
-      ["macro_f1", "Macro F1"],
-      ["accuracy", "Accuracy"],
-    ]) {
-      const ci = method[k];
-      comparisons.push([
-        name,
-        key === "component" ? "Component" : "Claim",
-        pp(contrast.difference[k]),
-        pp(ci.low) + " to " + pp(ci.high),
-        String(ci.defined_draws),
-      ]);
-    }
-  }
-  box.append(
-    table(
-      [
-        "Metric",
-        "Sampling unit",
-        "Difference (pp)",
-        "95% interval (pp)",
-        "Defined draws",
-      ],
-      comparisons,
-    ),
-  );
-  if (key === "climate")
-    box.append(
-      el(
-        "p",
-        "The largest component links " +
-          ds.largest_cluster.toLocaleString("en-US") +
-          " claims through shared evidence. This concentration limits the component interval. Claim-level resampling gives a sensitivity check.",
-        "results-note",
-      ),
+sizeChooser();
+narrow.addEventListener("change", sizeChooser);
+const views = ["investigations", "evaluation", "method"];
+function showView() {
+  const hash = window.location.hash.slice(1);
+  if (hash === "main") return;
+  const active = views.includes(hash) ? hash : "investigations";
+  for (const view of views) {
+    $(view).hidden = view !== active;
+    $("nav-" + view).setAttribute(
+      "aria-current",
+      view === active ? "page" : "false",
     );
-  const c = ds.configs["challenge-" + b],
-    misses = c.confusion
-      .map((row, i) => ({
-        name: verdicts[labels[i]],
-        count: row.reduce((s, x) => s + x, 0) - row[i],
-        total: row.reduce((s, x) => s + x, 0),
-      }))
-      .sort((a, b) => b.count - a.count)[0];
-  box.append(
-    el(
-      "p",
-      "Where challenge missed: " +
-        misses.count +
-        " of " +
-        misses.total +
-        " claims labeled " +
-        misses.name.toLowerCase() +
-        " received another verdict. This class had the most mismatches by count.",
-      "failure",
-    ),
-  );
-  const extra = Object.entries(policies).map(([id, name]) => {
-    const v = ds.configs[id + "-" + b];
-    return [
-      name,
-      pct(v.sentence_recall),
-      pct(v.complete_rationale_rate),
-      pct(v.quote_integrity),
-      pct(v.pivotal_rate),
-      v.mean_searches.toFixed(2),
-      v.mean_verifies.toFixed(2),
-    ];
-  });
-  box.append(
-    details(
-      "Evidence retrieval and source dependence",
-      table(
-        [
-          "Policy",
-          "Sentence recall",
-          "Full rationale",
-          "Exact quotes",
-          "Pivotal source",
-          "Mean searches",
-          "Mean verifications",
-        ],
-        extra,
-      ),
-      el(
-        "p",
-        "Sentence recall credits fully retained annotated evidence. Exact quote binding checks literal text. Annotations can omit relevant material.",
-        "results-note",
-      ),
-    ),
-  );
+  }
+  document.title =
+    "AgentResearch · " +
+    (active === "investigations"
+      ? "Malware investigations"
+      : active[0].toUpperCase() + active.slice(1));
 }
-$("dataset").addEventListener("change", showResults);
+window.addEventListener("hashchange", showView);
+showView();
+function showResults() {
+  if (summary)
+    renderEvaluation(
+      summary,
+      $("results"),
+      $("agent-results"),
+      $("cohort").value,
+      $("result-budget").value,
+    );
+}
+$("cohort").addEventListener("change", showResults);
 $("result-budget").addEventListener("change", showResults);
 async function start() {
   try {
     index = await getJSON("data/index.json");
-    for (const c of index.claims)
-      $("claim").add(option(c.query_id, "#" + c.query_id + " · " + c.claim));
-    $("claim").disabled = false;
-    if (!bundle && !request) await loadClaim();
+    refreshCases();
+    if (!bundle && !request) {
+      desiredCase = (
+        index.claims.find((c) => c.family === "WannaCry") || index.claims[0]
+      ).query_id;
+      await loadClaim();
+    }
   } catch (err) {
-    note("Could not load the SciFact index. " + err.message, true);
+    note("Could not load the case library. " + err.message, true);
   }
 }
 start();
@@ -798,5 +698,5 @@ getJSON("data/summary.json")
   })
   .catch(() => {
     $("results").textContent =
-      "The measured summary could not be loaded. Open the full release below for the published results.";
+      "Could not load the measured results. Open the full results below.";
   });

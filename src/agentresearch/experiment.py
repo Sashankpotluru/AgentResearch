@@ -612,7 +612,7 @@ def evaluate(
     cal = read(calibration)
     check_calibration(cal, p, prepared_dir=prepared)
     out, work = Path(output), Path(work_dir)
-    site = Path(site_dir) if site_dir else out.parent / "site/data"
+    site = Path(site_dir) if site_dir else out.parent / "archive/scifact-demo"
     cal_hash = file_digest(calibration)
     summary = {
         "schema_version": 1,

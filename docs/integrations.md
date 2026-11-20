@@ -3,23 +3,23 @@
 Install the package and the model extra, prepare a corpus and download the locked verifier. From the repository root, follow the [dataset instructions](datasets.md) and [model instructions](model.md).
 
 ```sh
-agentresearch run --corpus .artifacts/prepared/scifact/corpus.jsonl \
+agentresearch run --corpus results-cyber/corpus.jsonl \
   --model-dir .artifacts/model --db .artifacts/runs.sqlite \
-  --cache .artifacts/scores.sqlite --claim "Leaf exposure affects photosynthesis." \
-  --policy challenge --budget 4 --threshold 800000 --run-id leaf-exposure-resume \
+  --cache .artifacts/scores.sqlite --claim "WannaCry uses Peripheral Device Discovery." \
+  --policy challenge --budget 4 --threshold 900000 --run-id wannacry-resume \
   --max-steps 1 > .artifacts/partial.json
 
-agentresearch resume --corpus .artifacts/prepared/scifact/corpus.jsonl \
+agentresearch resume --corpus results-cyber/corpus.jsonl \
   --model-dir .artifacts/model --db .artifacts/runs.sqlite \
-  --cache .artifacts/scores.sqlite --run-id leaf-exposure-resume > .artifacts/run.json
+  --cache .artifacts/scores.sqlite --run-id wannacry-resume > .artifacts/run.json
 
-agentresearch audit .artifacts/run.json .artifacts/prepared/scifact/corpus.jsonl
-agentresearch report .artifacts/run.json .artifacts/prepared/scifact/corpus.jsonl > .artifacts/report.md
+agentresearch audit .artifacts/run.json results-cyber/corpus.jsonl
+agentresearch report .artifacts/run.json results-cyber/corpus.jsonl > .artifacts/report.md
 ```
 
-The example uses an illustrative threshold of 0.8, expressed in integer millionths, and pauses after one tool attempt. Omit `--max-steps` to run to completion. Both the corpus and model identities must match on resume. Given a portable run and its corpus, audit and report work offline without the optional neural dependencies. A successful audit replays tool selection, quotes and decisions from recorded scores. The report attributes those scores to the automated verifier. [Investigation format](format.md)
+The example uses an published threshold of 0.90, expressed in integer millionths, and pauses after one tool attempt. Omit `--max-steps` to run to completion. Both the corpus and model identities must match on resume. Given a portable run and its corpus, audit and report work offline without the optional neural dependencies. A successful audit replays tool selection, quotes and decisions from recorded scores. The report attributes those scores to the automated verifier. [Investigation format](format.md)
 
-## PubMed abstracts
+## Optional science connector for PubMed abstracts
 
 ```sh
 agentresearch pubmed --query 'tree canopy urban shade AND hasabstract' \
@@ -35,7 +35,7 @@ Each retained source includes its PMID and record URL. Inline XML markup is rend
 Install the official Python SDK extra with `python -m pip install '.[mcp,model]'`. Configure your MCP host to execute the following program with separate arguments. Use absolute paths for the executable, corpus, model directory and SQLite files when configuring a desktop host.
 
 ```sh
-agentresearch serve-mcp --corpus .artifacts/prepared/scifact/corpus.jsonl \
+agentresearch serve-mcp --corpus results-cyber/corpus.jsonl \
   --model-dir .artifacts/model --db .artifacts/runs.sqlite --cache .artifacts/scores.sqlite
 ```
 

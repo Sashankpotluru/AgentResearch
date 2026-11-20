@@ -16,7 +16,7 @@ import {
   safeUrl,
 } from "../../site/import.js";
 
-const data = new URL("../../site/data/", import.meta.url);
+const data = new URL("../../archive/scifact-demo/", import.meta.url);
 const index = JSON.parse(readFileSync(new URL("index.json", data)));
 const record = JSON.parse(readFileSync(new URL(index.claims[0].path, data)));
 const example = () => bundleFor(record.runs["challenge-4"], record.sources, []);
@@ -175,19 +175,30 @@ test("safe links and literal Markdown evidence distinguish original from withdra
   }
 });
 
-test("every released SciFact demo run is portable across Python and the browser", async () => {
-  assert.equal(index.claims.length, 40);
-  let checked = 0;
-  for (const item of index.claims) {
-    const group = JSON.parse(readFileSync(new URL(item.path, data)));
-    assert.equal(Object.keys(group.runs).length, 8);
-    for (const run of Object.values(group.runs)) {
-      await validateImport(bundleFor(run, group.sources, []));
-      checked++;
-    }
-  }
-  assert.equal(checked, 320);
-});
+for (const [name, root, count] of [
+  ["archived SciFact", data, 40],
+  ["malware", new URL("../../site/data/", import.meta.url), 24],
+]) {
+  test(
+    "all " + name + " demo runs replay across Python and the browser",
+    async () => {
+      const cases = JSON.parse(
+        readFileSync(new URL("index.json", root)),
+      ).claims;
+      assert.equal(cases.length, count);
+      let checked = 0;
+      for (const item of cases) {
+        const group = JSON.parse(readFileSync(new URL(item.path, root)));
+        assert.equal(Object.keys(group.runs).length, 8);
+        for (const run of Object.values(group.runs)) {
+          await validateImport(bundleFor(run, group.sources, []));
+          checked++;
+        }
+      }
+      assert.equal(checked, count * 8);
+    },
+  );
+}
 
 async function rechain(events) {
   let previous = null;

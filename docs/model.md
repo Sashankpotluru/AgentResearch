@@ -26,13 +26,15 @@ Each pair places the selected source sentence first and the complete claim secon
 ## Reusing scores
 
 ```python
+from agentresearch.data import read_corpus
 from agentresearch.model import NeuralVerifier, ScoreCache
 from agentresearch.retrieval import BM25Index
 
+corpus = read_corpus("results-cyber/corpus.jsonl")
 index = BM25Index(corpus)
 model = NeuralVerifier(corpus, ".artifacts/model", "data/model-lock.json",
                        device="cpu", batch_size=16)
-claim = "Leaf exposure affects photosynthesis."
+claim = "WannaCry uses Peripheral Device Discovery."
 spans = [span for hit in index.search(claim, limit=4)
          for span in index.read(claim, hit["source_id"])]
 with ScoreCache(".artifacts/scores.sqlite", model) as cache:

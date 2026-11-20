@@ -17,6 +17,7 @@ class Element {
     this.children = [];
     this.listeners = new Map();
     this.dataset = {};
+    this.attributes = {};
     this.classList = { toggle() {} };
   }
   append(...items) {
@@ -33,7 +34,15 @@ class Element {
     this.append(option);
     if (!this.value) this.value = option.value;
   }
-  setAttribute() {}
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  }
+  querySelectorAll(tag) {
+    return this.children.flatMap((n) => [
+      ...(n.tag === tag ? [n] : []),
+      ...n.querySelectorAll(tag),
+    ]);
+  }
   focus() {}
   addEventListener(name, handler) {
     this.listeners.set(name, handler);
@@ -76,9 +85,13 @@ async function desk(t) {
   get("save-json").disabled = get("save-md").disabled = true;
   get("budget").value = "4";
   get("policy").value = "challenge";
+  get("cohort").value = "benchmark";
+  get("result-budget").value = "8";
   const document = {
     getElementById: get,
     createElement: (tag) => new Element(tag, downloads),
+    createTextNode: (text) =>
+      Object.assign(new Element("#text", downloads), { textContent: text }),
     body: new Element("body", downloads),
   };
   let release,
@@ -88,6 +101,11 @@ async function desk(t) {
   });
   const testGlobals = {
     document,
+    window: {
+      location: { hash: "" },
+      addEventListener: (name, fn) => get("window").addEventListener(name, fn),
+      matchMedia: () => ({ matches: false, addEventListener() {} }),
+    },
     Option: class extends Element {
       constructor(label, value) {
         super("option", downloads);
@@ -96,11 +114,13 @@ async function desk(t) {
       }
     },
     fetch: async (path) => {
+      assert.match(path, /\?v=cyber-v1$/);
+      path = path.split("?")[0];
       if (path === "data/" + next.path) {
         waiting = true;
         await delayed;
       }
-      if (path === "data/summary.json") return { ok: false, status: 404 };
+
       return {
         ok: true,
         json: async () => JSON.parse(readFileSync(new URL(path, site))),
@@ -127,8 +147,9 @@ async function desk(t) {
     downloads,
     release,
     switchClaim() {
-      get("claim").value = next.query_id;
-      const done = get("claim").fire("change");
+      const done = get("case-list")
+        .children.find((c) => c.dataset.case === next.query_id)
+        .click();
       assert.equal(waiting, true);
       return done;
     },
@@ -137,6 +158,13 @@ async function desk(t) {
       return JSON.parse(await downloads.at(-1).text()).run.claim;
     },
   };
+}
+
+function activeCase(d) {
+  return d
+    .get("case-list")
+    .children.find((n) => n.attributes["aria-current"] === "true")?.dataset
+    .case;
 }
 
 test("delayed claim selection blocks old exports and exposes only the newly loaded run", async (t) => {
@@ -156,11 +184,8 @@ test("delayed claim selection blocks old exports and exposes only the newly load
     await done;
   }
   assert.equal(d.get("workspace").hidden, false);
-  assert.equal(d.get("claim").value, next.query_id);
-  assert.equal(
-    d.get("paper").children.find((n) => n.tag === "h3").textContent,
-    next.claim,
-  );
+  assert.equal(activeCase(d), next.query_id);
+  assert.equal(d.get("case-context").children.at(-1).textContent, next.claim);
   assert.equal(await d.exportedClaim(), next.claim);
 });
 
@@ -177,10 +202,10 @@ test("failed import during a claim fetch restores one coherent selectable and ex
     ];
     await file.fire("change");
     assert.match(d.get("status").textContent, /Import failed/);
-    assert.equal(d.get("claim").value, original.query_id);
+    assert.equal(activeCase(d), original.query_id);
     assert.equal(d.get("workspace").hidden, false);
     assert.equal(
-      d.get("paper").children.find((n) => n.tag === "h3").textContent,
+      d.get("case-context").children.at(-1).textContent,
       original.claim,
     );
     assert.equal(await d.exportedClaim(), original.claim);
@@ -188,7 +213,7 @@ test("failed import during a claim fetch restores one coherent selectable and ex
     d.release();
     await done;
   }
-  assert.equal(d.get("claim").value, original.query_id);
+  assert.equal(activeCase(d), original.query_id);
   assert.equal(await d.exportedClaim(), original.claim);
 });
 
@@ -197,7 +222,7 @@ test("trace rail and step navigation display the active run's recorded search, r
   const { events } = JSON.parse(
     readFileSync(new URL("data/" + original.path, site)),
   ).runs["challenge-4"];
-  const paper = d.get("paper");
+  const paper = d.get("step-detail");
   function descendants(node) {
     return [node, ...node.children.flatMap(descendants)];
   }
@@ -224,59 +249,153 @@ test("trace rail and step navigation display the active run's recorded search, r
   await checkStep(1, "Read source sentences", events[1].output[0].quote);
   rail(-1).click();
   await until(() =>
-    paper.children.some(
-      (n) => n.tag === "h3" && n.textContent === original.claim,
-    ),
+    paper
+      .querySelectorAll("summary")
+      .some((n) => n.textContent === "Recorded run identity"),
   );
 });
 
 for (const status of ["running", "failed"]) {
-  test(status + " imports announce and export provisional assessments", async (t) => {
-    const d = await desk(t);
-    assert.match(d.get("audit-status").textContent, /Current verdict/);
-    await d.get("save-json").click();
-    const bundle = JSON.parse(await d.downloads.at(-1).text());
-    const run = bundle.run;
-    run.events = [];
-    run.scores = [];
-    run.assessment = null;
-    run.status = status;
-    const zero = { search: 0, read: 0, verify: 0 };
-    run.usage = {
-      attempts: { ...zero },
-      successes: zero,
-      unique_sources: 0,
-      nli_pairs: 0,
-    };
-    if (status === "failed") {
-      const { digest } = await import("../../site/decision.js");
-      const event = {
-        sequence: 1,
-        tool: "search",
-        input: { claim: run.claim, mode: "relevance", limit: 12 },
-        output: null,
-        attempt: 1,
-        error: "permanent",
-        previous_hash: null,
+  test(
+    status + " imports announce and export provisional assessments",
+    async (t) => {
+      const d = await desk(t);
+      assert.match(d.get("audit-status").textContent, /Current verdict/);
+      await d.get("save-json").click();
+      const bundle = JSON.parse(await d.downloads.at(-1).text());
+      const run = bundle.run;
+      run.events = [];
+      run.scores = [];
+      run.assessment = null;
+      run.status = status;
+      const zero = { search: 0, read: 0, verify: 0 };
+      run.usage = {
+        attempts: { ...zero },
+        successes: zero,
+        unique_sources: 0,
+        nli_pairs: 0,
       };
-      run.events.push({ ...event, hash: await digest(event) });
-      run.usage.attempts.search = 1;
-    }
-    bundle.sources = {};
-    const bytes = new TextEncoder().encode(JSON.stringify(bundle));
-    const input = d.get("import-file");
-    input.files = [{ size: bytes.length, arrayBuffer: async () => bytes.buffer }];
-    await input.fire("change");
-    assert.equal(d.get("claim").value, "import", d.get("status").textContent);
-    assert.match(
-      d.get("audit-status").textContent,
-      new RegExp(status + ".*Provisional verdict", "i"),
-    );
-    await d.get("save-md").click();
-    const md = await d.downloads.at(-1).text();
-    assert.match(md, new RegExp("Recorded status: \\*\\*" + status));
-    assert.doesNotMatch(md, /Original verdict|Current audit/);
-    assert.match(md, /Provisional audit/);
-    assert.match(md, /Provisional base verdict/);
-  });
+      if (status === "failed") {
+        const { digest } = await import("../../site/decision.js");
+        const event = {
+          sequence: 1,
+          tool: "search",
+          input: { claim: run.claim, mode: "relevance", limit: 12 },
+          output: null,
+          attempt: 1,
+          error: "permanent",
+          previous_hash: null,
+        };
+        run.events.push({ ...event, hash: await digest(event) });
+        run.usage.attempts.search = 1;
+      }
+      bundle.sources = {};
+      const bytes = new TextEncoder().encode(JSON.stringify(bundle));
+      const input = d.get("import-file");
+      input.files = [
+        { size: bytes.length, arrayBuffer: async () => bytes.buffer },
+      ];
+      await input.fire("change");
+      assert.equal(activeCase(d), undefined);
+      assert.equal(d.get("case-title").textContent, "Imported investigation");
+      assert.doesNotMatch(d.get("evidence-note").textContent, /MITRE|malware/);
+      assert.match(
+        d.get("audit-status").textContent,
+        new RegExp(status + ".*Provisional verdict", "i"),
+      );
+      await d.get("save-md").click();
+      const md = await d.downloads.at(-1).text();
+      assert.match(md, new RegExp("Recorded status: \\*\\*" + status));
+      assert.doesNotMatch(md, /Original verdict|Current audit/);
+      assert.match(md, /Provisional audit/);
+      assert.match(md, /Provisional base verdict/);
+    },
+  );
 }
+
+test("case search matches family and technique, preserves opened case, and recovers from no matches", async (t) => {
+  const d = await desk(t),
+    search = d.get("case-search");
+  function filter(query) {
+    search.value = query;
+    search.fire("input");
+    return d
+      .get("case-list")
+      .children.filter((n) => n.dataset.case)
+      .map((n) => n.dataset.case);
+  }
+  assert.equal(d.get("case-title").textContent, "WannaCry");
+  assert.deepEqual(
+    filter(" lOcKbIt "),
+    index.claims
+      .filter((c) => c.family.includes("LockBit"))
+      .map((c) => c.query_id),
+  );
+  assert.ok(filter(original.technique_id).includes(original.query_id));
+  assert.deepEqual(filter("no-matching-family"), []);
+  assert.equal(d.get("case-count").textContent, "0 matching cases");
+  assert.equal(await d.exportedClaim(), original.claim);
+  assert.equal(filter("").length, 24);
+});
+
+test("evaluation navigation exposes distinct original and masked results plus policy cohorts", async (t) => {
+  const d = await desk(t);
+  window.location.hash = "#evaluation";
+  await d.get("window").fire("hashchange");
+  assert.equal(d.get("evaluation").hidden, false);
+  assert.equal(d.get("investigations").hidden, true);
+  const results = d.get("results");
+  assert.deepEqual(
+    results.querySelectorAll("h2").map((n) => n.textContent),
+    [
+      "ATT&CK publication retrieval",
+      "TRAM technique ranking",
+      "TRAM with literal technique IDs masked",
+    ],
+  );
+  assert.ok(
+    results.querySelectorAll("td").some((n) => n.textContent === "31.805%"),
+  );
+  assert.ok(
+    results.querySelectorAll("td").some((n) => n.textContent === "31.823%"),
+  );
+  assert.equal(
+    d.get("agent-results").querySelectorAll("td")[0].textContent,
+    64,
+  );
+  d.get("cohort").value = "demo";
+  d.get("cohort").fire("change");
+  assert.equal(
+    d.get("agent-results").querySelectorAll("td")[0].textContent,
+    24,
+  );
+  window.location.hash = "#investigations";
+  await d.get("window").fire("hashchange");
+  assert.equal(d.get("investigations").hidden, false);
+  assert.equal(activeCase(d), original.query_id);
+});
+
+test("source withdrawal, reset and policy selection update the exported view and assessments", async (t) => {
+  const d = await desk(t);
+  const source = d.get("source-list").querySelectorAll("button")[0];
+  source.click();
+  await until(() => !d.get("reset").disabled);
+  await d.get("save-json").click();
+  assert.deepEqual(
+    JSON.parse(await d.downloads.at(-1).text()).view.excluded_source_ids,
+    [source.dataset.source],
+  );
+  d.get("reset").click();
+  await until(() => d.get("reset").disabled);
+  d.get("policy").value = "first_hit";
+  await d.get("policy").fire("change");
+  d.get("budget").value = "8";
+  await d.get("budget").fire("change");
+  await d.get("save-json").click();
+  const bundle = JSON.parse(await d.downloads.at(-1).text());
+  assert.deepEqual(bundle.view.excluded_source_ids, []);
+  assert.equal(bundle.run.config.budget, 8);
+  assert.equal(bundle.run.config.policy, "first_hit");
+  await d.get("save-md").click();
+  assert.match(await d.downloads.at(-1).text(), /WannaCry/);
+});

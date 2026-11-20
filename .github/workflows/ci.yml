@@ -1,4 +1,4 @@
-name: Verify and publish research desk
+name: Verify and publish case browser
 on:
   pull_request:
   push:
@@ -50,8 +50,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -c requirements-lock.txt .
-      - name: Replay public release against frozen calibration
-        run: python scripts/verify_release.py --results results --site-dir site/data --frozen-calibration experiments/calibration.json
+      - name: Replay archived science release against frozen calibration
+        run: python scripts/verify_release.py --results results --site-dir archive/scifact-demo --frozen-calibration experiments/calibration.json
+      - name: Verify cyber rankings, model traces and browser bundles
+        run: python scripts/cyber.py verify --results results-cyber --site-dir site/data
   pages:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [python, browser, release]
@@ -74,6 +76,6 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
-      - name: Deploy verified desk
+      - name: Deploy verified case browser
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

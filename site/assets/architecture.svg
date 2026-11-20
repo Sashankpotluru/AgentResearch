@@ -1,36 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="550" viewBox="0 0 1180 550" role="img" aria-labelledby="title description">
-  <title id="title">AgentResearch architecture</title>
-  <desc id="description">An approved corpus enters a checkpointed Python BM25 investigator. A pinned NLI model scores exact excerpts. Source withdrawal produces a cited report. The frozen benchmark compares policies and publishes measured artifacts for the Pages research desk, which reuses recorded scores.</desc>
-  <defs>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M1 1 7 4 1 7" fill="none" stroke="#55766a" stroke-width="1.5"/></marker>
-    <style>
-      .title{font:38px Georgia,serif;fill:#123b32}.section{font:22px Georgia,serif;fill:#123b32}.name{font:bold 17px Verdana,Arial,sans-serif;fill:#123b32}.body{font:14px Verdana,Arial,sans-serif;fill:#405e50}.white{fill:#fff}.light{fill:#d2e4d9}.line{fill:none;stroke:#55766a;stroke-width:2;marker-end:url(#arrow)}.icon{fill:none;stroke:#50735e;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-    </style>
-  </defs>
-  <rect width="1180" height="550" fill="#f7faf7"/>
-  <text x="43" y="58" class="title">AgentResearch</text>
-  <text x="44" y="87" class="body">From a research claim to its source-withdrawal audit</text>
-  <rect x="32" y="113" width="1116" height="216" rx="13" fill="#e5efe6"/>
-  <text x="51" y="147" class="section">Local Python investigation</text>
-  <g fill="#fff" stroke="#adc5b4">
-    <rect x="51" y="168" width="193" height="137" rx="6"/><rect x="271" y="168" width="207" height="137" rx="6"/>
-    <rect x="505" y="168" width="190" height="137" rx="6"/><rect x="722" y="168" width="195" height="137" rx="6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 538" role="img" aria-labelledby="title description">
+  <title id="title">AgentResearch investigation and evaluation architecture</title>
+  <desc id="description">Pinned ATT&amp;CK and TRAM records become two corpora. The Python investigator reads ATT&amp;CK evidence and saves scored excerpts, checkpoints and source withdrawals for browser replay. Separate evaluations rank ATT&amp;CK publications and match TRAM sentences to technique definitions. Model policy results use 64 positive-derived claims.</desc>
+  <defs><marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4 0 8z" fill="#657386"/></marker></defs>
+  <style>
+    text { font-family: Helvetica Neue, Helvetica, Arial, sans-serif; fill: #17202e; }
+    .name { font-weight: 700; font-size: 20px; }
+    .copy { font-size: 16px; fill: #49596c; }
+    .arrow { fill: none; stroke: #657386; stroke-width: 2; marker-end: url(#tip); }
+    .box { fill: white; stroke: #c2cbd4; }
+  </style>
+  <rect width="860" height="538" fill="#f4f6f8"/>
+  <path fill="#17202e" d="M0 0h860v64H0z"/>
+  <path fill="#b4233e" d="M0 0h8v64H0z"/>
+  <text x="26" y="41" style="fill:white;font-size:27px;font-weight:700">AgentResearch</text>
+  <text x="835" y="39" text-anchor="end" style="fill:#d7dde4;font-size:16px">Evidence and evaluation</text>
+  <g>
+    <rect class="box" x="25" y="86" width="389" height="66" rx="4"/>
+    <text class="name" x="44" y="113">Enterprise ATT&amp;CK</text>
+    <text class="copy" x="44" y="137">Pinned malware, techniques and citations</text>
+    <rect class="box" x="446" y="86" width="389" height="66" rx="4"/>
+    <text class="name" x="465" y="113">TRAM report annotations</text>
+    <text class="copy" x="465" y="137">Pinned sentences and technique labels</text>
+    <path class="arrow" d="M220 153v27"/>
+    <path class="arrow" d="M641 153v27"/>
+    <rect class="box" x="25" y="183" width="810" height="67" rx="4"/>
+    <text class="name" x="44" y="211">Prepared corpora</text>
+    <text class="copy" x="44" y="235">Procedure evidence grouped by cited reference</text>
+    <text class="copy" x="465" y="235">Technique definitions and labeled sentences</text>
+    <path class="arrow" d="M220 251v27"/>
+    <path class="arrow" d="M641 251v27"/>
+    <rect class="box" x="25" y="281" width="389" height="103" rx="4"/>
+    <text class="name" x="44" y="311">Python investigator</text>
+    <text class="copy" x="44" y="337">Search, read and score exact excerpts.</text>
+    <text class="copy" x="44" y="361">Checkpoint calls and audit withdrawals.</text>
+    <rect class="box" x="446" y="281" width="389" height="103" rx="4"/>
+    <text class="name" x="465" y="311">Retrieval benchmarks</text>
+    <text class="copy" x="465" y="337">ATT&amp;CK query → cited publication</text>
+    <text class="copy" x="465" y="361">TRAM sentence → technique definition</text>
+    <path class="arrow" d="M220 385v31"/>
+    <path class="arrow" d="M641 385v31"/>
+    <rect class="box" x="25" y="420" width="389" height="91" rx="4"/>
+    <path fill="#b4233e" d="M25 420h4v91h-4z"/>
+    <text class="name" x="44" y="449">Saved investigations</text>
+    <text class="copy" x="44" y="475">Replay 24 cases in the Pages browser.</text>
+    <text class="copy" x="44" y="497">Evaluate model policies on 64 separate cases.</text>
+    <rect class="box" x="446" y="420" width="389" height="91" rx="4"/>
+    <text class="name" x="465" y="449">Measured rankings</text>
+    <text class="copy" x="465" y="475">Save query-level results and paired intervals.</text>
+    <text class="copy" x="465" y="497">Inspect comparisons in the Evaluation view.</text>
   </g>
-  <rect x="944" y="168" width="184" height="137" rx="6" fill="#123b32"/>
-  <g class="line"><path d="M246 238h19"/><path d="M480 238h19"/><path d="M697 238h19"/><path d="M919 238h19"/></g>
-  <g class="icon"><path d="m68 196 14-6 14 5-14 6zM68 203l14 5 14-6"/><circle cx="295" cy="196" r="7"/><path d="m300 201 7 7M522 190v16m6-13v10m6-15v20m6-14v8M740 192h26v14h-26zm4 0v-5h18v5m-14 5h10"/></g>
-  <path d="M961 187h16l5 5v17h-21zm15 1v5h5m-16 5h11m-11 5h9" fill="none" stroke="#d2e4d9" stroke-width="2" stroke-linejoin="round"/>
-  <text class="name" x="67" y="235">Approved corpus</text><text class="body" x="67" y="260">SciFact, Climate-FEVER</text><text class="body" x="67" y="282">or local source records</text>
-  <text class="name" x="286" y="235">BM25 tool agent</text><text class="body" x="286" y="260">Search and read by policy</text><text class="body" x="286" y="282">SQLite checkpoints</text>
-  <text class="name" x="520" y="235">NLI verifier</text><text class="body" x="520" y="260">Score exact excerpts</text><text class="body" x="520" y="282">Pin model and offsets</text>
-  <text class="name" style="font-size:15px" x="737" y="235">Source withdrawal</text><text class="body" x="737" y="260">Remove each source</text><text class="body" x="737" y="282">Recompute decisions</text>
-  <text class="name white" x="960" y="235">Cited report</text><text class="body light" x="960" y="260">Quotes, decisions</text><text class="body light" x="960" y="282">and the original trace</text>
-  <text x="51" y="350" class="section">Frozen benchmark</text>
-  <text x="51" y="375" class="section">and public release</text>
-  <g fill="#fff" stroke="#adc5b4"><rect x="51" y="394" width="331" height="111" rx="6"/><rect x="423" y="394" width="328" height="111" rx="6"/><rect x="792" y="394" width="336" height="111" rx="6"/></g>
-  <path d="M373 306v81" class="line"/><text x="396" y="349" class="body">Same agent and frozen threshold for every held-out claim</text>
-  <g class="line"><path d="M385 450h32"/><path d="M755 450h31"/></g>
-  <text class="name" x="69" y="425">Compare acquisition policies</text><text class="body" x="69" y="452">Fixed, first hit, challenge and guarded</text><text class="body" x="69" y="477">Budgets of four and eight sources</text>
-  <text class="name" x="441" y="425">Verify metrics and artifacts</text><text class="body" x="441" y="452">Paired intervals, numeric observations</text><text class="body" x="441" y="477">and replayable SciFact traces</text>
-  <text class="name" x="809" y="425">Pages research desk</text><text class="body" x="809" y="452">Inspect recorded steps and literal quotes</text><text class="body" x="809" y="477">Browser reuses scores for withdrawals</text>
 </svg>

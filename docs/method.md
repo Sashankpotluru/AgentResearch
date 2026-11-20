@@ -1,14 +1,14 @@
 # Investigation method
 
-A claim enters as a string and the investigator receives a fixed source corpus. A source is an abstract in SciFact, an article's pooled evidence in Climate-FEVER, or a record supplied by the researcher. The agent can search the corpus, read source sentences and request natural language inference (NLI) on the retained excerpts. Evaluation annotations are stored separately. [Corpus format](format.md) · [Data preparation](datasets.md)
+A claim enters as a string and the investigator receives a fixed source corpus. In the malware release, a source groups cleaned MITRE procedure summaries under one cited publication. Researchers can also supply their own records. The agent can search the corpus, read source sentences and request natural language inference (NLI) on the retained excerpts. Evaluation annotations are stored separately. [Corpus format](format.md) · [Data preparation](datasets.md)
 
-![AgentResearch investigation and evaluation architecture](../site/assets/architecture.svg)
+![AgentResearch investigation and evaluation architecture](../site/assets/architecture.svg?v=cyber-v1)
 
 ## Acquisition
 
-BM25 ranks sources using their title twice and body once. A read selects up to two sentences. Fixed reads down the relevance ranking. First hit stops on the first base verdict other than INSUFFICIENT. Challenge reads the first three sources, or exhausts the initial ranking, then searches again if budget remains. An insufficient provisional verdict triggers a search on the four highest-IDF claim terms. A substantive verdict triggers a lexical boost for contrast cues such as “however” and “not.” Guarded uses the same acquisition as challenge. Each successful read consumes one source from the budget. [Frozen retrieval and policy parameters](../experiments/protocol.json)
+BM25 ranks sources using their title twice and body once. A read selects up to two sentences. Fixed reads down the relevance ranking. First hit stops on the first base verdict other than INSUFFICIENT. Challenge reads the first three sources, or exhausts the initial ranking, then searches again if budget remains. An insufficient provisional verdict triggers a search on the four highest-IDF claim terms. A substantive verdict triggers a lexical boost for contrast cues such as “however” and “not.” Guarded uses the same acquisition as challenge. Each successful read consumes one source from the budget. [Frozen retrieval and policy parameters](../experiments/cyber-protocol.json)
 
-The locked cross-encoder assesses the sentence as premise and the full claim as hypothesis. The trace preserves the prefix that fit the 512-token model input, its Unicode character offsets and three integer scores summing to one million. Threshold selection used fixed/eight on 537 SciFact training claims and chose 900,000 millionths. All held-out configurations share that threshold. [Verifier and score bindings](model.md) · [Frozen calibration](../experiments/calibration.json)
+The locked cross-encoder assesses the sentence as premise and the full claim as hypothesis. The trace preserves the prefix that fit the 512-token model input, its Unicode character offsets and three integer scores summing to one million. Threshold selection used fixed/eight on 537 SciFact training claims and chose 900,000 millionths. The cybersecurity experiment transferred that threshold unchanged, and the model frequently labeled unrelated behavior as a refutation. [Verifier and score bindings](model.md) · [Frozen calibration](../experiments/calibration.json)
 
 ## Decisions and withdrawal
 

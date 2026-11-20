@@ -1,86 +1,51 @@
-# Reproducing the frozen evaluation
+# Malware evidence evaluation
 
-The versioned protocol lives in `experiments/protocol.json`. It fixes datasets, splits, eligible labels, policies, budgets, threshold selection, comparisons and uncertainty estimates. See [dataset provenance](datasets.md), [model setup](model.md) and the [investigation format](format.md) for the input contracts. The release runs use integer model judgments and a deterministic tool policy.
+The release measures publication retrieval, technique ranking and model decisions separately. The original protocol fixes the source revisions, deduplication, sampling, baseline parameters, policies, budgets and comparisons. A later protocol specifies the identifier diagnostic. [Original protocol](../experiments/cyber-protocol.json) · [Diagnostic protocol](../experiments/cyber-diagnostic-protocol.json) · [Machine-readable results](../results-cyber/summary.json)
 
-## Running the experiment
+## Finding the cited publication
 
-From a checkout with the package's model dependencies and pinned local weights, run the following commands. The example uses MPS and model batches of 16. The model identity includes these settings and library versions. Use the same identity for both stages.
+Each of 10,739 family–technique relationships supplies a query and a set of cited source IDs from the same ATT&CK catalogue. Rank all 1,120 source records with word BM25, or restrict candidates to the known family’s source memberships. Mean Recall@5 averages the fraction of each query’s gold sources recovered among its first five hits.
 
-```sh
-python scripts/reproduce.py prepare --download --raw-dir .artifacts/raw --out-dir .artifacts/prepared
-python scripts/reproduce.py calibrate --prepared .artifacts/prepared --model .artifacts/model \
-  --cache .artifacts/scores.sqlite --device mps --batch-size 16 \
-  --output experiments/calibration.json
-```
+| Population | Queries | Global BM25 | Family-filtered BM25 |
+| --- | ---: | ---: | ---: |
+| All 747 families | 10,739 | 97.625% | 99.208% |
+| Description contains “ransom”, 77 families | 1,527 | 95.285% | 98.166% |
 
-Independently check the selection against the prepared calibration split, then commit it before evaluating held-out claims.
+The overall gain was 1.583 percentage points (95% paired family-bootstrap interval 1.188 to 2.002). The filter uses extra catalogue metadata. High overlap on constructed queries leaves independent factual QA performance unknown. [Publication rankings](../results-cyber/attack-rankings.json.gz)
 
-```sh
-PYTHONPATH=src python - <<'PYTHON'
-from agentresearch.experiment import protocol_path, read
-from agentresearch.verify import check_calibration
+## Matching TRAM sentences to techniques
 
-check_calibration(read("experiments/calibration.json"), read(protocol_path()),
-                  prepared_dir=".artifacts/prepared")
-PYTHON
-```
+The retrieval target is the set of labeled techniques for each report sentence. Candidate definitions comprise 706 active techniques and two historical IDs required by TRAM. Word BM25, character trigram TF-IDF and RRF rank the same candidates. Character TF-IDF fits its vocabulary and weights to the technique definitions. Unlabeled rows were excluded. [Data processing](datasets.md)
 
-The calibration stage runs fixed acquisition once per claim at eight reads. It applies each grid threshold to the resulting identical score ledger, computes three-class macro F1, and breaks exact rational ties by taking the higher threshold. The artifact includes every calibration claim's numeric scores, outcomes, benchmark class, model identity, and split and protocol hashes. The command prints its byte digest and physical invocation measurements.
+| Original run, 4,036 unique labeled sentences | Mean Recall@5 | Hit@1 | Hit@5 |
+| --- | ---: | ---: | ---: |
+| Word BM25 | 22.992% | 11.174% | 26.685% |
+| Character TF-IDF | **31.805%** | 14.222% | 36.026% |
+| RRF | 29.047% | 13.355% | 33.325% |
 
-```sh
-python scripts/reproduce.py evaluate --prepared .artifacts/prepared --model .artifacts/model \
-  --cache .artifacts/scores.sqlite --device mps --batch-size 16 \
-  --calibration experiments/calibration.json --output results \
-  --work-dir .artifacts/eval-work --site-dir site/data
-python scripts/verify_release.py --results results --site-dir site/data
-python scripts/verify_release.py --results results --site-dir site/data --prepared .artifacts/prepared \
-  --frozen-calibration experiments/calibration.json
-```
+RRF gained 6.055 percentage points over word BM25 (95% paired interval 4.892 to 7.185). Character TF-IDF performed best overall. The 149 reports form 145 connected components through shared sentences, the largest containing 189 items. The ransomware-title slice includes 557 sentences in 22 components. Bootstrap intervals use 2,000 paired draws with seed 17. Hit@5 credits any retrieved gold technique, while Recall@5 credits the fraction of gold techniques retrieved. [Per-query rankings](../results-cyber/tram-rankings.json.gz)
 
-The installed commands are `agentresearch calibrate`, `agentresearch evaluate`, and `agentresearch verify --results results [--site-dir site/data] [--prepared .artifacts/prepared]`. The Python entry points `experiment.calibrate(prepared, model, cache, output, *, device, batch_size, warm)` and `experiment.evaluate(prepared, model, cache, calibration, output, *, device, batch_size, work_dir, site_dir, warm)` accept the same paths. `verify.verify_results(path, prepared_dir=None, *, site_dir=None, frozen_calibration=None, frozen_sha256=None)` raises on mismatches.
+### Post-hoc identifier-masked diagnostic
 
-The release verifier checks the calibration copy against the separately frozen selection. From a source checkout it defaults to `experiments/calibration.json`. For a custom reproduction, pass `--frozen-calibration PATH` or a previously recorded `--frozen-sha256 HEX`. Prepared verification checks the original fixed-eight source ranking, ordered sentence selection, and valid retained prefix lengths for every calibration query.
+After examining the original rankings, the diagnostic removed literal technique IDs from scoring text only. Of 4,036 sentences, 254 contained an explicit identifier. Candidate definitions, original sentences, query IDs, gold sets and parameters stayed fixed. Top-five order changed for 0, 32 and 31 queries respectively. These are repeated measurements on the original sample. [Diagnostic protocol](../experiments/cyber-diagnostic-protocol.json) · [Diagnostic rankings](../results-cyber/tram-id-masked-rankings.json.gz)
 
-Resume an interrupted evaluation by repeating the evaluation command with the same paths. Each completed query's eight runs form one checksummed, atomically replaced checkpoint. The checkpoint directory depends on the calibration file hash, dataset and corpus digest. Checkpoint loading validates the query identity, all eight configurations, and SciFact trace completion before accumulating records. Interrupted claims restart. Public writes stage in a private directory on the destination filesystem before atomic replacement. Invalid or incomplete runs stop the pipeline. Finish verification before publishing the release.
+| Masked run, same 4,036 sentences | Mean Recall@5 |
+| --- | ---: |
+| Word BM25 | 22.992% |
+| Character TF-IDF | **31.823%** |
+| RRF | 29.022% |
 
-## Measurement
+## Model decisions and costs
 
-Each dataset uses its frozen set of benchmark classes. SciFact has three and Climate-FEVER has four. Macro F1 averages class-specific F1 values with zero for an undefined class. An additional predicted class counts against the gold class. Accuracy, per-class recall and a confusion matrix accompany macro F1. Coverage counts every final verdict except ABSTAIN, including INSUFFICIENT. Risk is the error fraction among covered claims, with null when no claims are covered. The pivotal rate counts queries whose base verdict changes after at least one single-source withdrawal.
+The benchmark selects 64 positive-derived claims, 32 from each side of the ransomware-description filter. Stable ID hashes select cases before examining outcomes. The demo separately selects cases from 24 distinct families. Each case has four policies and two budgets, giving 512 benchmark runs and 192 demo runs. The original model threshold of 0.90 transfers from an earlier SciFact calibration. [Sample IDs](../results-cyber/selection.json) · [Model identity](../results-cyber/model.json) · [Canonical runs](../results-cyber/traces/)
 
-Sentence recall divides the number of retained positive annotated sentences by their total, summed over queries. A score receives credit only when its exact retained prefix covers the complete non-whitespace sentence text. The complete-rationale rate counts eligible queries for which at least one full positive rationale survives. Climate positive candidates are singleton rationale groups. Quote integrity measures exact source-slice binding. An exact quote can support an incorrect model judgment, and an unannotated sentence can contain relevant evidence.
+| Eight-source policy | Cases | Supports | Refutes | Conflict | Abstain | Mean reads | Pivotal cases |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Fixed | 64 | 0 | 45 | 19 | 0 | 8.00 | 12 |
+| First hit | 64 | 7 | 52 | 5 | 0 | 1.48 | 64 |
+| Challenge | 64 | 0 | 44 | 20 | 0 | 8.00 | 14 |
+| Guarded | 64 | 0 | 44 | 6 | 14 | 8.00 | 14 |
 
-Read the primary contrast as challenge minus fixed at budget eight. Guarded minus challenge measures selective risk and coverage. First-hit minus fixed measures cost alongside classification quality. The four-read configurations provide sensitivity comparisons.
+The model frequently assigned a high contradiction score to a different behavior discussed in the same corpus. A high score can therefore produce a spurious refutation. All four eight-source configurations returned zero insufficient assessments. Guarded abstains on source-sensitive base verdicts. Logical reads, verifications and scored sentence pairs count tool usage in the trace. Calibration, precision on negatives and balanced factual accuracy require additional evidence. [All budgets, costs and cohorts](../results-cyber/summary.json) · [Source-dependence method](method.md)
 
-Within each dataset, 2,000 bootstrap draws sample connected components with replacement using seed 17. Every sampled component contributes all its claims with multiplicity. Each draw uses the same resample across every policy and budget before taking paired differences. Percentile intervals use linear interpolation at 2.5% and 97.5%. Intervals include the number of defined draws, including when a risk denominator vanishes. The fixed macro F1 class set applies to every resample. Climate-FEVER also includes paired claim-level resampling. Its largest evidence-sharing component contains 1,040 of 1,535 claims. This concentration limits interpretation of the component intervals. Both clustering schemes can miss correlations across sources.
-
-The logical cost counts attempts at search, read and verify, together with the number of scored sentence pairs in the completed trace. Physical scoring is shared across policies and budgets. For each consecutive block of up to 16 claims, prefetch scores the relevance top eight, uses each claim's first three source readings to choose focus or challenge at the frozen threshold, then scores only the extra sources an eight-read challenge run would reach. Each model batch contains up to the configured batch size. At most 13 distinct sources can enter this union for one claim. The logical investigator still calls, records, and validates each scheduled tool. Prefetch receives claim text, the corpus index and the verifier. Annotations enter only the evaluation join. `--no-prefetch` uses on-demand scoring and can change physical batching. Hardware or batching changes can affect floating-point inference before quantization.
-
-Physical timings in `physical.json` cover instrumented scoring and trace-construction stages for each dataset. `invocation` describes the latest evaluation process. `sessions` retains observations from earlier invocations in the same work directory. Previously warmed caches shift costs to the warming process. Record that process separately. A hard stop can leave physical work since the last flushed observation uncounted. `cache_reused_pairs` counts requested pairs resolved without new inference, including repeated requests within a batch.
-
-## Result artifacts
-
-All paths below are relative to `results/` unless stated otherwise.
-
-| Artifact | Contents |
-|---|---|
-| `manifest.json` | SHA-256 of each result file and site data file, plus the frozen protocol and calibration digests |
-| `protocol.json`, `calibration.json` | Exact copies of the preregistered protocol and selected-threshold input |
-| `summary.json`, `summary.csv` | Full statistics, paired contrasts and intervals in JSON, and point estimates per configuration in CSV |
-| `scifact/records.json.gz`, `climate/records.json.gz` | Versioned numeric ledger with one row per query, policy and budget |
-| `scifact/corpus.jsonl`, `scifact/dev.jsonl` | Full corpus and original held-out annotations in the pinned prepared format |
-| `scifact/traces/<query_id>.json.gz` | All eight complete, replayable investigation traces for that SciFact query |
-| `physical.json` | Device, batch size, elapsed seconds, physical, truncated, requested and cache-reused pair counts |
-
-The public Climate rows contain the original numeric query ID string, a numeric cluster ID string, derived numeric benchmark class and count observations. They use opaque integer source and sentence ordinals. The release supplies no Climate claim, article title, original annotation links, evidence text, or quoted trace. The prepared-data verification command reacquires those checks locally after dataset preparation.
-
-In each `records` array, class indices 0–4 denote SUPPORTS, REFUTES, INSUFFICIENT, CONFLICT and ABSTAIN. A record's `label`, `prediction` and `base` use these indices. Each score is `[source_ordinal, sentence_ordinal, retained_codepoint_length, contradiction, entailment, neutral]`. Ordinals start at zero in the frozen corpus and source sentence order. Scores are integer millionths. `withdrawals` maps each scored source ordinal to the verdict after removing all its scores through ordered `[source_ordinal, class_index]` pairs. Remaining fields give run identity, policy, budget, source sensitivity, logical attempt and success counts, number of NLI pairs, quote integrity numerator/denominator, and annotation observations. Numeric files use finite JSON numbers, with null for undefined ratios. Canonical run traces retain their integer-only format.
-
-The public verifier rebuilds aggregate statistics and bootstrap intervals independently, checks identities, reclassifies source withdrawals from integer scores, and replays every SciFact trace and gold association. With the prepared data it also replays Climate lexical search, sentence acquisition, numeric source bindings, and annotation-based observations. The model is not rerun by verification. Unsigned checksums provide consistency checks. They do not establish who produced an internally consistent set of scores.
-
-## Site data contract
-
-The site fetches `site/data/index.json` on startup and loads one relative claim path at a time. The index contains `schema_version`, `claims`, `policies`, `budgets`, `threshold`, `corpus_digest` and `model_digest`. Every claim entry contains `query_id`, `claim` and `path`, such as `claims/123.json`. The 40 eligible SciFact queries with lowest SHA-256 of their original ID are selected without inspecting outcomes.
-
-A claim file has `schema_version, query_id, claim, label, cluster_id, runs, sources`. The keys of `runs` have the form `fixed-4`, `first_hit-8`, `challenge-4` or `guarded-8`, covering all eight combinations. Each value is a complete investigation run. The shared `sources` object maps each source ID from any successful search hit or read across the eight runs to its full source object. The full-corpus digest in the run binds the original benchmark corpus. This per-claim subset supports literal quote and snippet checks. Reproducing the search ranking requires the full released corpus.
-
-Each full SciFact trace group has `schema_version, query_id, runs`. Its `runs` values match the demo when that query is selected. `site/data/summary.json` is byte-identical to the full JSON results summary. It contains `schema_version, threshold, model_digest, datasets`. Each dataset contains `queries, clusters, largest_cluster, configs, contrasts`. Configurations contain point statistics, confusion rows ordered by the gold class index, all five prediction columns, `per_class` and `intervals`. Interval axes are `component` and, for Climate, `claim`. Each statistic has `low, high, defined_draws`. Contrast keys follow `challenge-8_minus_fixed-8`. Each contains `difference` and `intervals`.
+The verifier recomputes rankings, intervals and decisions against the released prepared data and checks browser files against the complete canonical runs. Strict intake also starts from the pinned upstream downloads. [Verification commands](reproduce.md) · [Archived science evaluation](legacy-evaluation.md)

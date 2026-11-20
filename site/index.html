@@ -2,277 +2,256 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#edf5f0" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#17202e" />
     <meta
       name="description"
-      content="Inspect recorded claim investigations, read exact source excerpts, and test how withdrawing an abstract changes the model's assessment."
+      content="Inspect recorded malware investigations, trace MITRE ATT&CK evidence to its cited publications, and measure the effect of withdrawing a source."
     />
-    <title>AgentResearch · Research desk</title>
+    <title>AgentResearch · Malware investigations</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23123b32'/%3E%3Cpath d='M6 10l11-5 10 4-11 5zM6 16l10 4 11-5M6 22l10 4 11-5' fill='none' stroke='%23edf5f0' stroke-width='2'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23b4233e'/%3E%3Cpath d='M6 24 15 7h3l9 17h-4l-2-4H12l-2 4zm8-8h5l-2.5-5z' fill='white'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="style.css" />
-    <script type="module" src="app.js"></script>
+    <link rel="stylesheet" href="style.css?v=cyber-v1" />
+    <script type="module" src="app.js?v=cyber-v1"></script>
   </head>
   <body>
-    <a class="skip" href="#desk">Skip to research desk</a>
+    <a class="skip" href="#main">Skip to content</a>
     <header class="mast">
       <div class="mast-inner">
-        <a class="brand" href="#desk"
-          ><svg viewBox="0 0 36 36" aria-hidden="true">
-            <rect width="36" height="36" rx="7" />
-            <g
-              fill="none"
-              stroke="white"
-              stroke-width="1.7"
-              stroke-linejoin="round"
-            >
-              <path d="m7 13 12-6 10 4-12 6zM7 18l10 4 12-6M7 23l10 4 12-6" />
-            </g>
-          </svg>
-          <h1>AgentResearch</h1></a
+        <a class="brand" href="#investigations"
+          ><svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="4" fill="#b4233e" />
+            <path
+              fill="white"
+              d="M5 25 14 7h4l9 18h-4l-2-4H11l-2 4zm8-8h6l-3-6z"
+            /></svg
+          >AgentResearch</a
         >
         <nav aria-label="Main navigation">
-          <a href="#desk">Research desk</a><a href="#benchmark">Benchmark</a
-          ><a href="#method">Method</a
-          ><a href="https://github.com/Sashankpotluru/AgentResearch"
-            >GitHub <span aria-hidden="true">↗</span></a
-          >
+          <a id="nav-investigations" href="#investigations">Investigations</a
+          ><a id="nav-evaluation" href="#evaluation">Evaluation</a
+          ><a id="nav-method" href="#method">Method</a>
         </nav>
+        <a class="github" href="https://github.com/Sashankpotluru/AgentResearch"
+          >GitHub ↗</a
+        >
       </div>
     </header>
-    <main>
-      <section id="desk" class="desk" aria-labelledby="desk-title">
-        <div class="desk-intro">
-          <div>
-            <h2 id="desk-title">Research desk</h2>
-            <p>
-              Read the evidence behind a claim. Withdraw a source to see what
-              changes.
-            </p>
-          </div>
-          <div class="files">
-            <button id="import-button" type="button">
-              <span aria-hidden="true">↥</span> Import run</button
-            ><input
-              type="file"
-              id="import-file"
-              accept=".json,application/json"
-              hidden
-            />
-            <details id="exports">
-              <summary>Export <span aria-hidden="true">⌄</span></summary>
-              <div>
-                <button id="save-json" disabled>Portable JSON</button
-                ><button id="save-md" disabled>Markdown report</button>
-              </div>
-            </details>
-          </div>
-        </div>
-        <div class="controls" role="group" aria-label="Recorded investigation">
-          <label class="claim-field"
-            >SciFact claim<select
-              id="claim"
-              disabled
-              aria-label="SciFact claim"
-            ></select
-          ></label>
-          <label
-            >Policy<select id="policy" aria-label="Policy" disabled>
-              <option value="challenge">Challenge</option>
-              <option value="fixed">Fixed</option>
-              <option value="first_hit">First hit</option>
-              <option value="guarded">Guarded</option>
-            </select></label
-          >
-          <label
-            >Read budget<select id="budget" aria-label="Read budget" disabled>
-              <option value="4">4 sources</option>
-              <option value="8">8 sources</option>
-            </select></label
-          >
-        </div>
-        <p class="status" id="status" role="status">
-          Loading the recorded investigation…
-        </p>
-        <div class="bench-desk" id="workspace" hidden>
-          <aside class="rail">
-            <div class="rail-top">
-              <span class="rail-symbol" aria-hidden="true">≡</span>
-              <h3>Run trace</h3>
-            </div>
-            <p class="rail-caption" id="rail-caption"></p>
-            <nav id="steps" aria-label="Recorded tool steps"></nav>
-            <div class="rail-foot" id="cost"></div>
-          </aside>
-          <article
-            class="paper"
-            id="paper"
-            aria-label="Evidence report"
-          ></article>
-          <aside class="drawer" aria-labelledby="drawer-title">
-            <div class="drawer-heading">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path
-                  d="M3 9h18v11H3zM5 9V6h14v3M8 6V3h8v3M9 13h6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.7"
-                  stroke-linejoin="round"
+    <main id="main" tabindex="-1">
+      <section id="investigations" aria-label="Investigations">
+        <div class="browser">
+          <aside class="sidebar" aria-label="Saved investigations">
+            <details id="chooser" open>
+              <summary id="chooser-summary">Case library</summary>
+              <div class="search-field">
+                <label class="sr" for="case-search"
+                  >Search cases by family, technique or ID</label
+                ><input
+                  id="case-search"
+                  type="search"
+                  placeholder="Search cases"
+                  autocomplete="off"
                 />
-              </svg>
-              <h3 id="drawer-title">Source drawer</h3>
-            </div>
-            <p>
-              Withdraw an entire source to test the verdict against the
-              remaining evidence.
-            </p>
-            <div id="drawer-sources"></div>
-            <button id="reset" class="reset" type="button" disabled>
-              Restore all sources
-            </button>
-            <div class="drawer-note">
-              <strong>Recorded inference</strong>
-              <p>
-                Source changes reuse the saved sentence scores. New claims run
-                in the local Python agent.
-              </p>
-            </div>
+              </div>
+              <p id="case-count" role="status"></p>
+              <div id="case-list" aria-label="Matching cases"></div>
+            </details>
           </aside>
-        </div>
-        <p class="sr" id="audit-status" aria-live="polite"></p>
-        <noscript
-          >Enable JavaScript to use the desk, or download the traces and use the
-          Python command line.</noscript
-        >
-      </section>
-      <section id="benchmark" class="lower" aria-labelledby="bench-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="bench-title">Benchmark results</h2>
-            <p>
-              Four policies investigate the same held-out claims under the same
-              source budgets.
-            </p>
+          <div class="case-page">
+            <div class="case-toolbar">
+              <span>Investigation record</span>
+              <div class="files">
+                <button id="import-button" type="button">Import run</button
+                ><input
+                  id="import-file"
+                  type="file"
+                  accept=".json,application/json"
+                  hidden
+                />
+                <details id="exports">
+                  <summary>Export</summary>
+                  <div>
+                    <button id="save-json" disabled>Portable JSON</button
+                    ><button id="save-md" disabled>Markdown report</button>
+                  </div>
+                </details>
+              </div>
+            </div>
+            <p id="status" role="status">Loading the saved investigation…</p>
+            <article id="workspace" hidden>
+              <header class="case-header">
+                <h1 id="case-title" tabindex="-1"></h1>
+                <div id="case-context"></div>
+              </header>
+              <div class="config">
+                <label
+                  >Policy
+                  <select id="policy" disabled>
+                    <option value="challenge">Challenge</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="first_hit">First hit</option>
+                    <option value="guarded">Guarded</option>
+                  </select></label
+                ><label
+                  >Read budget
+                  <select id="budget" disabled>
+                    <option value="4">4 sources</option>
+                    <option value="8">8 sources</option>
+                  </select></label
+                >
+              </div>
+              <section id="paper" aria-label="Model assessment"></section>
+              <section class="evidence">
+                <div class="section-head">
+                  <h2>Evidence</h2>
+                  <button id="reset" disabled>Restore all sources</button>
+                </div>
+                <p id="evidence-note"></p>
+                <div id="source-list"></div>
+              </section>
+              <details id="trace">
+                <summary id="rail-caption">Recorded steps</summary>
+                <p id="cost"></p>
+                <nav id="steps" aria-label="Recorded tool steps"></nav>
+                <section id="step-detail" aria-label="Selected step"></section>
+              </details>
+            </article>
+            <p class="sr" id="audit-status" aria-live="polite"></p>
+            <noscript
+              >Enable JavaScript to inspect a saved case, or open the
+              <a
+                href="https://github.com/Sashankpotluru/AgentResearch/tree/main/results-cyber"
+                >published results</a
+              >.</noscript
+            >
           </div>
-          <a href="data/summary.json" download>Download summary JSON</a>
         </div>
-        <div class="bench-controls">
-          <label
-            >Dataset<select id="dataset">
-              <option value="scifact">SciFact</option>
-              <option value="climate">Climate-FEVER</option>
-            </select></label
+      </section>
+      <section
+        id="evaluation"
+        class="reading"
+        aria-labelledby="evaluation-title"
+        hidden
+      >
+        <h1 id="evaluation-title">Evaluation</h1>
+        <p class="intro">
+          How well do saved investigations recover the publications and
+          techniques that researchers labeled?
+        </p>
+        <p>
+          <a href="data/summary.json?v=cyber-v1" download
+            >Download measured results (JSON)</a
           >
+        </p>
+        <div id="results"><p>Loading measured results…</p></div>
+        <h2>Model assessments</h2>
+        <p>
+          The threshold of 0.90 came from SciFact calibration. On 64
+          positive-derived malware claims, fixed at eight reads supported none,
+          refuted 45 and returned conflict on 19. These labels describe model
+          behavior. Unrelated evidence can receive a high contradiction score.
+        </p>
+        <div class="config">
           <label
-            >Read budget<select id="result-budget">
+            >Cohort
+            <select id="cohort">
+              <option value="benchmark">Benchmark · 64 cases</option>
+              <option value="demo">Illustrative · 24 cases</option>
+            </select></label
+          ><label
+            >Read budget
+            <select id="result-budget">
               <option value="8">8 sources</option>
               <option value="4">4 sources</option>
             </select></label
           >
         </div>
-        <div id="results" aria-live="polite">
-          <p>Loading measured results…</p>
-        </div>
-        <details class="notes provenance">
-          <summary>Frozen protocol and source hashes</summary>
-          <p>
-            SHA-256 identifies the exact bytes used for the published release.
-          </p>
-          <dl>
-            <dt>Evaluation protocol</dt>
-            <dd>
-              e5e11ae082d3a179d1c0fe55b79f059b482bfb000266a2364fc15774e2ea0ed2
-            </dd>
-            <dt>Frozen calibration</dt>
-            <dd>
-              528a153bef5bab0b02443c7b9bb5a206a2f65bdbbb136d30f56a6b9b2741e55e
-            </dd>
-            <dt>SciFact source archive</dt>
-            <dd>
-              11c621288d41ac144d29b13b0f8503b3820b7d6e8b1f6ff24dff335c196d76be
-            </dd>
-            <dt>Climate-FEVER source file</dt>
-            <dd>
-              8a4b9032d861be482ffb49dddfd283ffa6089e654f1e968040011882c5eb6e0b
-            </dd>
-          </dl>
-        </details>
-        <div class="resource-links">
+        <div id="agent-results" aria-live="polite"></div>
+        <p>
+          Each row uses the same cases within a cohort. A pivotal case has at
+          least one source whose removal changes the base assessment. Balanced
+          factual accuracy cannot be estimated from these positive-derived
+          cases.
+        </p>
+        <div class="resources">
           <a
-            href="https://github.com/Sashankpotluru/AgentResearch/tree/main/results"
-            >Full release &amp; traces ↗</a
-          ><a
-            href="https://github.com/Sashankpotluru/AgentResearch/archive/refs/heads/main.zip"
-            >Download code &amp; artifacts (ZIP)</a
-          ><a
-            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/results/manifest.json"
-            >Artifact checksums ↗</a
-          ><a
-            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/experiments/protocol.json"
-            >Frozen protocol ↗</a
-          ><a
-            href="https://github.com/Sashankpotluru/AgentResearch/actions/workflows/ci.yml"
-            >Verification runs ↗</a
-          >
-        </div>
-      </section>
-      <section id="method" class="lower" aria-labelledby="method-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="method-title">How the investigation works</h2>
-            <p>
-              The local agent retrieves and scores source sentences. This desk
-              replays the resulting record.
-            </p>
-          </div>
-        </div>
-        <figure>
-          <img
-            src="assets/architecture.svg"
-            alt="Python searches the approved corpus, checkpoints tool calls, scores exact source excerpts and audits source withdrawals. The benchmark publishes results and the browser replays recorded scores."
-            loading="lazy"
-          />
-        </figure>
-        <div class="method-notes">
-          <div>
-            <h3>What the desk checks</h3>
-            <p>
-              Import a portable JSON bundle up to 5 MiB. The desk checks event
-              hashes, source identities, literal quotes, model identifiers and
-              decisions. Reproducing retrieval against the full corpus requires
-              the CLI. A consistent record cannot authenticate the model
-              execution.
-            </p>
-          </div>
-          <div>
-            <h3>Evidence and attribution</h3>
-            <p>
-              Model scores are uncalibrated. Annotations can miss relevant
-              evidence, and different sources can repeat a finding. SciFact
-              claims and annotations are CC BY 4.0. S2ORC abstracts are ODC-By
-              1.0. Climate-FEVER contributes numerical results.
-            </p>
-          </div>
-        </div>
-        <div class="resource-links">
-          <a
-            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/docs/reproduce.md"
-            >Run a new claim ↗</a
+            href="https://github.com/Sashankpotluru/AgentResearch/tree/main/results-cyber"
+            >Full results and traces</a
           ><a
             href="https://github.com/Sashankpotluru/AgentResearch/blob/main/docs/evaluation.md"
-            >Evaluation protocol ↗</a
+            >Evaluation details</a
+          >
+        </div>
+      </section>
+      <section
+        id="method"
+        class="reading"
+        aria-labelledby="method-title"
+        hidden
+      >
+        <h1 id="method-title">Method</h1>
+        <p class="intro">
+          Trace a model assessment back to the exact text it scored.
+        </p>
+        <figure>
+          <img
+            src="assets/architecture.svg?v=cyber-v1"
+            alt="Pinned ATT&amp;CK and TRAM data feed separate retrieval evaluations. The Python investigator reads ATT&amp;CK evidence, saves exact scores and checkpoints, and audits source withdrawal. The browser replays those records."
+          />
+        </figure>
+        <h2>Where the evidence comes from</h2>
+        <p>
+          The corpus groups MITRE ATT&amp;CK procedure summaries by reference URL.
+          A link identifies the cited publication or, for seven records without
+          an external URL, the ATT&amp;CK software page. The investigator scored
+          MITRE’s wording. Different publications can repeat the same observation.
+        </p>
+        <h2>What withdrawal tests</h2>
+        <p>
+          Removing a publication drops every scored excerpt from that source.
+          The browser recomputes the assessment from the remaining saved scores.
+          A changed verdict shows dependence on that publication. The recorded
+          investigation stays available for comparison and export.
+        </p>
+        <h2>Checking an imported run</h2>
+        <p>
+          Import a portable JSON bundle up to 5 MiB. The browser checks event
+          hashes, quoted spans, source and model identities, and replayed
+          decisions locally. The Python verifier can also replay retrieval
+          against the full corpus. Unsigned records cannot establish who
+          produced a score.
+        </p>
+        <div class="resources">
+          <a
+            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/docs/reproduce.md"
+            >Run a local investigation</a
+          ><a
+            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/experiments/cyber-protocol.json"
+            >Frozen protocol</a
+          ><a
+            href="https://github.com/Sashankpotluru/AgentResearch/blob/main/results-cyber/manifest.json"
+            >Artifact checksums</a
+          >
+        </div>
+        <h2>Data credits</h2>
+        <p>
+          MITRE ATT&amp;CK® supplies software, procedures and techniques. The
+          Center for Threat-Informed Defense’s TRAM dataset supplies annotated
+          report sentences. This project cleans and groups the records and adds
+          retrieval rankings and model assessments.
+        </p>
+        <div class="resources">
+          <a href="assets/licenses/attack-license.txt">ATT&amp;CK terms</a
+          ><a href="assets/licenses/tram-license.txt">TRAM Apache 2.0 license</a
+          ><a href="assets/licenses/tram-notice.txt">TRAM notice</a
           ><a
             href="https://github.com/Sashankpotluru/AgentResearch/blob/main/THIRD_PARTY_NOTICES.md"
-            >Sources &amp; licenses ↗</a
+            >All credits</a
           >
         </div>
       </section>
     </main>
-    <footer>
-      <strong>AgentResearch</strong><a href="#desk">Back to research desk ↑</a>
-    </footer>
   </body>
 </html>

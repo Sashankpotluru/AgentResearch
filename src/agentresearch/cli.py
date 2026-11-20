@@ -196,7 +196,7 @@ def build_parser():
             command.add_argument(
                 "--bundle",
                 action="store_true",
-                help="Write a portable research desk JSON bundle",
+                help="Write a portable investigation JSON bundle",
             )
         command.set_defaults(handler=_inspect)
     prep = commands.add_parser(
