@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "experiment": "agentresearch-cyber-v1-identifier-control",
+  "status": "post_hoc_diagnostic_declared_before_measurement",
+  "base_protocol_sha256": "6a9563fe13a56d354d85aafd6ab27329e0100a2745e6649e1098d8d227f6335d",
+  "reason": "Review identified naturally embedded technique IDs in 254 TRAM items; 133 include a gold ID. Measure the effect without rewriting the original experiment.",
+  "dataset": "All 4036 deduplicated labeled TRAM items from the original pinned preparation",
+  "query_transform": {
+    "pattern": "\\bT\\d{4}(?:\\.\\d{3})?\\b",
+    "replacement": " ",
+    "case_sensitive": true,
+    "after_replacement": "collapse whitespace and strip ends"
+  },
+  "preserve": ["original sentence text", "query IDs", "gold labels", "report clusters", "candidate definitions", "all ranking parameters", "model traces", "original as-run results"],
+  "methods": ["bm25", "char_tfidf", "rrf"],
+  "metrics_and_bootstrap": "unchanged from the base protocol",
+  "result_key": "tram_id_masked",
+  "interpretation": "Post-hoc identifier-excluded sensitivity analysis; no hyperparameter tuning, no new independent benchmark and no claim of pre-registered performance."
+}
