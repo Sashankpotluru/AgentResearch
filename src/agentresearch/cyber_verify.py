@@ -1,13 +1,23 @@
 """Independent validation of CTI inventory, rankings, sample membership and saved traces."""
 
 import math
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
 
-from .cyber_data import prepare, protocol, sha
+from .cyber_data import (
+    PREPARED_FILES,
+    RETRIEVAL_LIMITATIONS,
+    SELECTION_NOTE,
+    SOURCE_NOTE,
+    diagnostic_protocol,
+    prepare,
+    protocol,
+    sha,
+)
 from .data import file_digest, pin_path, read_corpus
 from .experiment import checkpoint_id, make_index, read
 from .report import validate_run
@@ -243,8 +253,11 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
         ("cyber-protocol.json", "protocol_sha256"),
         ("cyber-sources.json", "source_pins_sha256"),
         ("model-lock.json", "model_lock_sha256"),
+        ("cyber-diagnostic-protocol.json", "diagnostic_protocol_sha256"),
     ):
-        require(file_digest(pin_path(name)) == m[key], "release pin differs: " + name)
+        require(
+            file_digest(pin_path(name)) == m.get(key), "release pin differs: " + name
+        )
     require(
         m["intake"] == read(pin_path("cyber-sources.json")), "intake identity differs"
     )
@@ -254,10 +267,32 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
         if f.is_file() and f != out / "manifest.json"
     }
     require(m["files"] == actual, "public artifact inventory or checksum differs")
+    nested = m["prepared"]
+    require(set(nested["files"]) == set(PREPARED_FILES), "prepared inventory differs")
+    require(
+        nested.get("input") == m["intake"]
+        and nested.get("protocol_sha256") == m["protocol_sha256"],
+        "nested preparation pins differ",
+    )
     p = protocol()
+    diagnostic = diagnostic_protocol()
     meta, summary, selected, cat = (
         read(out / name)
         for name in ("model.json", "summary.json", "selection.json", "catalog.json.gz")
+    )
+    required_limitations = [*p["limitations"], *RETRIEVAL_LIMITATIONS]
+    notes = summary.get("limitations")
+    require(
+        isinstance(notes, list) and all(note in notes for note in required_limitations),
+        "required scientific limitations differ",
+    )
+    compare(
+        summary.get("identifier_diagnostic"),
+        {
+            key: diagnostic[key]
+            for key in ("status", "query_transform", "interpretation")
+        },
+        "identifier diagnostic disclosure",
     )
     by_id = {q["query_id"]: q for q in cat["queries"]}
     require(
@@ -272,6 +307,7 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
         "experiment identity differs",
     )
     compare(selected, verify_selection(cat["queries"], p), "selection")
+    compare(read(out / "prepared" / "selection.json"), selected, "prepared selection")
     qids = set(selected["benchmark"] + selected["demo"])
     require(
         set(actual)
@@ -281,11 +317,12 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
             "summary.json",
             "attack-rankings.json.gz",
             "tram-rankings.json.gz",
+            "tram-id-masked-rankings.json.gz",
             "selection.json",
         }
         | {f"traces/{qid}.json.gz" for qid in qids}
         | {"corpus.jsonl", "prepared/manifest.json"}
-        | {f"prepared/{name}" for name in m["prepared"]["files"]},
+        | {f"prepared/{name}" for name in PREPARED_FILES},
         "unexpected release files",
     )
     require(
@@ -296,6 +333,15 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
     strict = True
     if strict:
         prepared = Path(prepared)
+        require(
+            {
+                f.relative_to(prepared).as_posix()
+                for f in prepared.rglob("*")
+                if f.is_file()
+            }
+            == {*PREPARED_FILES, "manifest.json"},
+            "unexpected prepared file inventory",
+        )
         require(
             m["prepared"] == read(prepared / "manifest.json"),
             "prepared manifest differs",
@@ -340,30 +386,69 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
             counts(corpus, original, items, m["prepared"]["tram_input_rows"]),
             "counts",
         )
-    for name, queries, cluster, candidates, comparison in (
-        ("attack", cat["queries"], "family_id", cat["sources"], "family_bm25"),
-        ("tram", cat["tram"], "component", cat["techniques"], "rrf"),
+    for name, dataset, filename, queries, cluster, candidates, comparison in (
+        (
+            "attack",
+            "attack",
+            "attack-rankings.json.gz",
+            cat["queries"],
+            "family_id",
+            cat["sources"],
+            "family_bm25",
+        ),
+        (
+            "tram",
+            "tram",
+            "tram-rankings.json.gz",
+            cat["tram"],
+            "component",
+            cat["techniques"],
+            "rrf",
+        ),
+        (
+            "tram_id_masked",
+            "tram",
+            "tram-id-masked-rankings.json.gz",
+            cat["tram"],
+            "component",
+            cat["techniques"],
+            "rrf",
+        ),
     ):
-        rows = read(out / f"{name}-rankings.json.gz")
+        rows = read(out / filename)
         expected = {
             q["query_id"]: (q["gold"], q[cluster], q["ransomware_related"])
             for q in queries
         }
         require(len(expected) == len(queries), "duplicate query ID")
-        check_rankings(rows, expected, set(candidates), p[name + "_methods"])
+        check_rankings(rows, expected, set(candidates), p[dataset + "_methods"])
         compare(
             summary["retrieval"][name],
-            ranking_statistics(rows, p[name + "_methods"], comparison, p),
+            ranking_statistics(rows, p[dataset + "_methods"], comparison, p),
             name,
         )
         if strict:
             from .cyber_retrieval import attack_rankings, tram_rankings
 
-            replay = (
-                attack_rankings(corpus, original)
-                if name == "attack"
-                else tram_rankings(original["techniques"], items)
-            )
+            if dataset == "attack":
+                replay = attack_rankings(corpus, original)
+            else:
+                replay_items = items
+                if name == "tram_id_masked":
+                    rule = diagnostic["query_transform"]
+                    pattern = re.compile(rule["pattern"])
+                    replay_items = [
+                        {
+                            **item,
+                            "sentence": " ".join(
+                                pattern.sub(
+                                    rule["replacement"], item["sentence"]
+                                ).split()
+                            ),
+                        }
+                        for item in items
+                    ]
+                replay = tram_rankings(original["techniques"], replay_items)
             require(rows == replay, "lexical ranking replay differs")
     grouped = {}
     for qid in sorted(qids):
@@ -442,6 +527,11 @@ def verify_demo(site, manifest, summary, selected, catalog, corpus, grouped, p):
     compare(read(site / "summary.json"), summary, "browser summary")
     index = read(site / "index.json")
     require(
+        index.get("source_note") == SOURCE_NOTE
+        and index.get("selection_note") == SELECTION_NOTE,
+        "browser attribution or sample purpose differs",
+    )
+    require(
         index["schema_version"] == 1
         and index["corpus_digest"] == corpus.digest
         and index["model_digest"] == summary["model_digest"]
@@ -462,6 +552,7 @@ def verify_demo(site, manifest, summary, selected, catalog, corpus, grouped, p):
         require(row["path"] == relative, "browser path differs")
         record = read(site / relative)
         require(record["schema_version"] == 1, "browser schema differs")
+        require(record.get("source_note") == SOURCE_NOTE, "case attribution differs")
         for key in (
             "query_id",
             "claim",

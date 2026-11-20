@@ -26,6 +26,7 @@ def test_corrupted_or_unexpected_inventory(tmp_path, target):
         ("source_pins_sha256", "cyber-sources.json"),
         ("protocol_sha256", "cyber-protocol.json"),
         ("model_lock_sha256", "model-lock.json"),
+        ("diagnostic_protocol_sha256", "cyber-diagnostic-protocol.json"),
     ]:
         manifest[key] = file_digest(pin_path(name))
     write(tmp_path / "manifest.json", manifest)
@@ -58,4 +59,63 @@ def test_resealed_metrics_or_rankings_fail_independent_recomputation(tmp_path, n
     manifest["files"][name] = file_digest(release / name)
     write(release / "manifest.json", manifest)
     with pytest.raises(ValueError, match="numeric mismatch"):
+        verify(release)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "reason"),
+    [
+        ("extra", "prepared inventory"),
+        ("nested_protocol", "nested preparation pins"),
+        ("nested_input", "nested preparation pins"),
+        ("selection", "prepared selection"),
+        ("limitation", "scientific limitations"),
+        ("diagnostic_pin", "release pin differs"),
+        ("diagnostic_label", "identifier diagnostic disclosure"),
+    ],
+)
+def test_resealed_provenance_discrepancies(tmp_path, mutation, reason):
+    import os
+    import shutil
+    from pathlib import Path
+
+    from agentresearch.data import file_digest
+
+    root = Path(__file__).resolve().parents[1] / "results-cyber"
+    release = tmp_path / "release"
+    shutil.copytree(root, release, copy_function=os.link)
+    manifest = read(release / "manifest.json")
+    nested = manifest["prepared"]
+    if mutation in {"limitation", "diagnostic_label"}:
+        summary = read(release / "summary.json")
+        if mutation == "limitation":
+            summary["limitations"].pop(1)
+        else:
+            summary["identifier_diagnostic"]["status"] = "pre_registered"
+        write(release / "summary.json", summary)
+        manifest["files"]["summary.json"] = file_digest(release / "summary.json")
+    elif mutation == "diagnostic_pin":
+        manifest["diagnostic_protocol_sha256"] = "0" * 64
+    else:
+        if mutation == "extra":
+            key = "extra.json"
+            write(release / "prepared" / key, {"extra": True})
+        elif mutation == "selection":
+            key = "selection.json"
+            selected = read(release / "prepared" / key)
+            selected["benchmark"].reverse()
+            write(release / "prepared" / key, selected)
+        elif mutation == "nested_protocol":
+            nested["protocol_sha256"] = "0" * 64
+        else:
+            nested["input"] = []
+        if mutation in {"extra", "selection"}:
+            nested["files"][key] = file_digest(release / "prepared" / key)
+            manifest["files"]["prepared/" + key] = nested["files"][key]
+        write(release / "prepared/manifest.json", nested)
+        manifest["files"]["prepared/manifest.json"] = file_digest(
+            release / "prepared/manifest.json"
+        )
+    write(release / "manifest.json", manifest)
+    with pytest.raises(ValueError, match=reason):
         verify(release)

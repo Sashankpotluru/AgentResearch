@@ -5,15 +5,10 @@ Procedure text is quoted data. No command or linked report is executed or fetche
 
 from pathlib import Path
 
-from .cyber_data import protocol, selection
+from .cyber_data import SELECTION_NOTE, SOURCE_NOTE, protocol, selection
 from .data import file_digest
 from .experiment import encoded, read, write, write_bytes
 from .schema import Corpus
-
-SOURCE_NOTE = (
-    "Evidence excerpts are MITRE ATT&CK procedure summaries. Publication links "
-    "identify cited references; the original vendor reports were not downloaded."
-)
 
 
 def demo_record(query, runs, corpus, catalog):
@@ -139,7 +134,7 @@ def publish(prepared, work, out, site_dir):
             "corpus_digest": corpus.digest,
             "model_digest": summary["model_digest"],
             "source_note": SOURCE_NOTE,
-            "selection_note": "24 illustrative cases; separate from the 64-case benchmark.",
+            "selection_note": SELECTION_NOTE,
         },
     )
     write(site_dir / "summary.json", summary)

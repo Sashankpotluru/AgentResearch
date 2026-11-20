@@ -20,6 +20,27 @@ def protocol():
     return read(pin_path("cyber-protocol.json"))
 
 
+PREPARED_FILES = ("corpus.json.gz", "catalog.json.gz", "tram.json.gz", "selection.json")
+SOURCE_NOTE = (
+    "Evidence excerpts are MITRE ATT&CK procedure summaries. Publication links "
+    "identify cited references; the original vendor reports were not downloaded."
+)
+SELECTION_NOTE = "24 illustrative cases; separate from the 64-case benchmark."
+RETRIEVAL_LIMITATIONS = (
+    "Some original TRAM sentences mention ATT&CK IDs and include report extraction artifacts.",
+    "Family-filtered BM25 uses public malware-to-source membership unavailable to the global comparator.",
+)
+
+
+def diagnostic_protocol():
+    diagnostic = read(pin_path("cyber-diagnostic-protocol.json"))
+    if diagnostic["base_protocol_sha256"] != file_digest(
+        pin_path("cyber-protocol.json")
+    ):
+        raise ValueError("diagnostic bound to a different base protocol")
+    return diagnostic
+
+
 def intake(directory, *, download=False):
     directory = Path(directory)
     pins = read(pin_path("cyber-sources.json"))
@@ -282,15 +303,7 @@ def prepare(raw, work):
         "protocol_sha256": file_digest(pin_path("cyber-protocol.json")),
         "corpus_digest": corpus.digest,
         "tram_input_rows": len(rows),
-        "files": {
-            name: file_digest(Path(work) / name)
-            for name in (
-                "corpus.json.gz",
-                "catalog.json.gz",
-                "tram.json.gz",
-                "selection.json",
-            )
-        },
+        "files": {name: file_digest(Path(work) / name) for name in PREPARED_FILES},
     }
     write(Path(work) / "manifest.json", manifest)
     return manifest

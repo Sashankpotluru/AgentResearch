@@ -5,13 +5,24 @@ import copy
 import pytest
 from test_report import example
 
+from agentresearch.cyber_data import SELECTION_NOTE, SOURCE_NOTE
 from agentresearch.cyber_publication import demo_record
 from agentresearch.cyber_verify import verify_demo
 from agentresearch.data import file_digest
 from agentresearch.experiment import write
 
 
-@pytest.mark.parametrize("changed", ["source", "score_quote", "summary"])
+@pytest.mark.parametrize(
+    "changed",
+    [
+        "source",
+        "score_quote",
+        "summary",
+        "index_attribution",
+        "sample_purpose",
+        "case_attribution",
+    ],
+)
 def test_resealed_browser_payload_cannot_change_evidence_or_results(tmp_path, changed):
     run, corpus = example()
     query = {
@@ -40,6 +51,8 @@ def test_resealed_browser_payload_cannot_change_evidence_or_results(tmp_path, ch
     selected = {"demo": ["case-1"]}
     index = {
         "schema_version": 1,
+        "source_note": SOURCE_NOTE,
+        "selection_note": SELECTION_NOTE,
         "claims": [{**query, "path": "claims/case-1.json"}],
         "corpus_digest": corpus.digest,
         "model_digest": run["model_digest"],
@@ -67,10 +80,15 @@ def test_resealed_browser_payload_cannot_change_evidence_or_results(tmp_path, ch
     verify_demo(tmp_path, manifest(), summary, selected, catalog, corpus, grouped, p)
     if changed == "summary":
         write(tmp_path / "summary.json", {**summary, "measured": 99})
+    elif changed in {"index_attribution", "sample_purpose"}:
+        del index["source_note" if changed == "index_attribution" else "selection_note"]
+        write(tmp_path / "index.json", index)
     else:
         edited = copy.deepcopy(record)
         if changed == "source":
             next(iter(edited["sources"].values()))["text"] += " changed"
+        elif changed == "case_attribution":
+            del edited["source_note"]
         else:
             edited["runs"][key]["scores"][0]["span"]["quote"] += " changed"
         write(tmp_path / "claims/case-1.json", edited)

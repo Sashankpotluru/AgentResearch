@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from .cyber_data import protocol, selection
+from .cyber_data import RETRIEVAL_LIMITATIONS, diagnostic_protocol, protocol, selection
 from .data import file_digest, pin_path
 from .engine import Investigator
 from .experiment import checkpoint_id, make_index, prefetch, read, runtime, write
@@ -171,6 +171,21 @@ def counts(corpus, catalog, items, raw_rows):
     }
 
 
+def identifier_diagnostic(out, definitions, items, summary):
+    """Add the separately declared sensitivity result without rerunning baseline methods."""
+    from .cyber_retrieval import retrieval_summary, tram_rankings
+
+    diagnostic = diagnostic_protocol()
+    rows = tram_rankings(definitions, items, mask_identifiers=True)
+    write(out / "tram-id-masked-rankings.json.gz", rows)
+    summary["retrieval"][diagnostic["result_key"]] = retrieval_summary(
+        rows, "rrf", protocol()
+    )
+    summary["identifier_diagnostic"] = {
+        key: diagnostic[key] for key in ("status", "query_transform", "interpretation")
+    }
+
+
 def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
     from .cyber_retrieval import attack_rankings, retrieval_summary, tram_rankings
     from .schema import digest
@@ -200,11 +215,7 @@ def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
         "counts": counts(corpus, catalog, items, manifest["tram_input_rows"]),
         "agent": {},
         "retrieval": {},
-        "limitations": p["limitations"]
-        + [
-            "Some original TRAM sentences mention ATT&CK IDs and include report extraction artifacts.",
-            "Family-filtered BM25 uses public malware-to-source membership unavailable to the global comparator.",
-        ],
+        "limitations": [*p["limitations"], *RETRIEVAL_LIMITATIONS],
     }
 
     for name, rows, contrast in (
@@ -213,6 +224,7 @@ def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
     ):
         write(out / f"{name}-rankings.json.gz", rows)
         summary["retrieval"][name] = retrieval_summary(rows, contrast, p)
+    identifier_diagnostic(out, catalog["techniques"], items, summary)
     for group, ids in selected.items():
         summary["agent"][group] = summarize_runs(
             read(work / "traces" / f"{qid}.json.gz") for qid in ids
@@ -232,6 +244,7 @@ def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
             "selection.json",
             "attack-rankings.json.gz",
             "tram-rankings.json.gz",
+            "tram-id-masked-rankings.json.gz",
             "summary.json",
         )
     ]
@@ -242,6 +255,9 @@ def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
     release = {
         "schema_version": 1,
         "protocol_sha256": file_digest(pin_path("cyber-protocol.json")),
+        "diagnostic_protocol_sha256": file_digest(
+            pin_path("cyber-diagnostic-protocol.json")
+        ),
         "model_lock_sha256": file_digest(pin_path("model-lock.json")),
         "source_pins_sha256": file_digest(pin_path("cyber-sources.json")),
         "intake": manifest["input"],

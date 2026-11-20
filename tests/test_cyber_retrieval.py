@@ -93,3 +93,32 @@ def test_manual_metrics_and_invalid_candidate():
     assert result["all"]["metrics"]["bm25"] == pytest.approx(scores)
     with pytest.raises(ValueError, match="invalid ranking"):
         check_rankings([row], {"q": (gold, "x", True)}, set("abce"), ["bm25", "other"])
+
+
+def test_post_hoc_identifier_mask_only_changes_ranker_input():
+    definitions = {
+        "T1111": {"name": "Record", "description": "Observed notation 1234.567."},
+        "T2222": {"name": "Disk", "description": "Report the disk state."},
+    }
+    items = [
+        {
+            "query_id": "stable",
+            "sentence": "T1234.567",
+            "gold": ["T2222"],
+            "component": "doc",
+            "ransomware_related": True,
+        }
+    ]
+    observed = tram_rankings(definitions, items)[0]
+    masked = tram_rankings(definitions, items, mask_identifiers=True)[0]
+    assert observed["rankings"]["char_tfidf"] == ["T1111"]
+    assert masked["rankings"] == {"bm25": [], "char_tfidf": [], "rrf": []}
+    assert {k: v for k, v in observed.items() if k != "rankings"} == {
+        k: v for k, v in masked.items() if k != "rankings"
+    }
+    assert items[0]["sentence"] == "T1234.567"
+    for text in ("t1234.567", "prefixT1234.567suffix", "1234.567"):
+        probe = [{**items[0], "sentence": text}]
+        assert tram_rankings(definitions, probe) == tram_rankings(
+            definitions, probe, mask_identifiers=True
+        )

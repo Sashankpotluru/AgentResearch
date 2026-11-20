@@ -1,11 +1,12 @@
 """Definition-only ranking and family-/report-clustered retrieval evaluation."""
 
 import math
+import re
 from collections import Counter, defaultdict
 
 import numpy as np
 
-from .cyber_data import normalize
+from .cyber_data import diagnostic_protocol, normalize
 from .data import source_from_lines
 from .retrieval import BM25Index, tokens
 from .schema import Corpus
@@ -86,7 +87,9 @@ def attack_rankings(corpus, catalog):
     return rows
 
 
-def tram_rankings(definitions, items):
+def tram_rankings(definitions, items, *, mask_identifiers=False):
+    rule = diagnostic_protocol()["query_transform"] if mask_identifiers else None
+    identifier = re.compile(rule["pattern"]) if rule else None
     sources = [
         source_from_lines(tid, d["name"], [("definition", d["description"])])
         for tid, d in sorted(definitions.items())
@@ -95,7 +98,10 @@ def tram_rankings(definitions, items):
     chars = CharacterIndex({s.source_id: f"{s.title} {s.text}" for s in sources})
     rows = []
     for item in items:
-        word, char = word_ranking(words, item["sentence"]), chars.rank(item["sentence"])
+        query = item["sentence"]
+        if identifier is not None:
+            query = normalize(identifier.sub(rule["replacement"], query))
+        word, char = word_ranking(words, query), chars.rank(query)
         rows.append(
             {
                 "query_id": item["query_id"],
