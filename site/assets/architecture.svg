@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 538" role="img" aria-labelledby="title description">
   <title id="title">AgentResearch investigation and evaluation architecture</title>
-  <desc id="description">Pinned ATT&amp;CK and TRAM records become two corpora. The Python investigator reads ATT&amp;CK evidence and saves scored excerpts, checkpoints and source withdrawals for browser replay. Separate evaluations rank ATT&amp;CK publications and match TRAM sentences to technique definitions. Model policy results use 64 positive-derived claims.</desc>
+  <desc id="description">Pinned ATT&amp;CK and TRAM records become two corpora. The Python investigator reads ATT&amp;CK evidence and saves scored excerpts, checkpoints and source withdrawals for browser replay. Separate evaluations measure canonical source-record Recall@5 for ATT&amp;CK and match TRAM sentences to technique definitions. Model policy results use 64 positive-derived claims.</desc>
   <defs><marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4 0 8z" fill="#657386"/></marker></defs>
   <style>
     text { font-family: Helvetica Neue, Helvetica, Arial, sans-serif; fill: #17202e; }
@@ -25,7 +25,7 @@
     <path class="arrow" d="M641 153v27"/>
     <rect class="box" x="25" y="183" width="810" height="67" rx="4"/>
     <text class="name" x="44" y="211">Prepared corpora</text>
-    <text class="copy" x="44" y="235">Procedure evidence grouped by cited reference</text>
+    <text class="copy" x="44" y="235">Procedure summaries grouped by canonical URL</text>
     <text class="copy" x="465" y="235">Technique definitions and labeled sentences</text>
     <path class="arrow" d="M220 251v27"/>
     <path class="arrow" d="M641 251v27"/>
@@ -35,7 +35,7 @@
     <text class="copy" x="44" y="361">Checkpoint calls and audit withdrawals.</text>
     <rect class="box" x="446" y="281" width="389" height="103" rx="4"/>
     <text class="name" x="465" y="311">Retrieval benchmarks</text>
-    <text class="copy" x="465" y="337">ATT&amp;CK query → cited publication</text>
+    <text class="copy" x="465" y="337">ATT&amp;CK query → canonical source record</text>
     <text class="copy" x="465" y="361">TRAM sentence → technique definition</text>
     <path class="arrow" d="M220 385v31"/>
     <path class="arrow" d="M641 385v31"/>

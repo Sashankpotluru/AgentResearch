@@ -60,7 +60,7 @@ def main():
     inputs.add_argument(
         "--prepared",
         type=Path,
-        help="Also replay every lexical ranking and all saved traces",
+        help="Replay against a separately prepared directory (default: bundled preparation)",
     )
     inputs.add_argument(
         "--strict-intake",

@@ -1,6 +1,6 @@
 # Investigation method
 
-A claim enters as a string and the investigator receives a fixed source corpus. In the malware release, a source groups cleaned MITRE procedure summaries under one cited publication. Researchers can also supply their own records. The agent can search the corpus, read source sentences and request natural language inference (NLI) on the retained excerpts. Evaluation annotations are stored separately. [Corpus format](format.md) · [Data preparation](datasets.md)
+A claim enters as a string and the investigator receives a fixed source corpus. In the malware release, a source groups cleaned MITRE procedure summaries under a canonical reference URL. Relationships with identical cleaned wording share that URL, even when they cite different publications. Researchers can also supply their own records. The agent can search the corpus, read source sentences and request natural language inference (NLI) on the retained excerpts. Evaluation annotations are stored separately. [Corpus format](format.md) · [Data preparation](datasets.md)
 
 ![AgentResearch investigation and evaluation architecture](../site/assets/architecture.svg?v=cyber-v1)
 

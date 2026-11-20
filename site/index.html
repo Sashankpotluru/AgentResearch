@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#17202e" />
     <meta
       name="description"
-      content="Inspect recorded malware investigations, trace MITRE ATT&CK evidence to its cited publications, and measure the effect of withdrawing a source."
+      content="Explore recorded malware investigations, read MITRE ATT&amp;CK procedure summaries, and measure the effect of withdrawing a source."
     />
     <title>AgentResearch · Malware investigations</title>
     <link
@@ -14,7 +14,7 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23b4233e'/%3E%3Cpath d='M6 24 15 7h3l9 17h-4l-2-4H12l-2 4zm8-8h5l-2.5-5z' fill='white'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="style.css?v=cyber-v1" />
-    <script type="module" src="app.js?v=cyber-v1"></script>
+    <script type="module" src="app.js?v=cyber-v2"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -137,8 +137,8 @@
       >
         <h1 id="evaluation-title">Evaluation</h1>
         <p class="intro">
-          How well do saved investigations recover the publications and
-          techniques that researchers labeled?
+          How often do the rankers retrieve the canonical ATT&amp;CK source records
+          and the techniques labeled in TRAM?
         </p>
         <p>
           <a href="data/summary.json?v=cyber-v1" download
@@ -197,22 +197,23 @@
         </p>
         <figure>
           <img
-            src="assets/architecture.svg?v=cyber-v1"
+            src="assets/architecture.svg?v=cyber-v2"
             alt="Pinned ATT&amp;CK and TRAM data feed separate retrieval evaluations. The Python investigator reads ATT&amp;CK evidence, saves exact scores and checkpoints, and audits source withdrawal. The browser replays those records."
           />
         </figure>
         <h2>Where the evidence comes from</h2>
         <p>
           The corpus groups MITRE ATT&amp;CK procedure summaries by reference URL.
-          A link identifies the cited publication or, for seven records without
-          an external URL, the ATT&amp;CK software page. The investigator scored
+          Identical summaries pool reference URLs across relationships. The
+          selected URL can therefore come from a different relationship. Seven
+          records use a fallback ATT&amp;CK software page. The investigator scored
           MITRE’s wording. Different publications can repeat the same observation.
         </p>
         <h2>What withdrawal tests</h2>
         <p>
-          Removing a publication drops every scored excerpt from that source.
+          Removing a source record drops every scored excerpt from that record.
           The browser recomputes the assessment from the remaining saved scores.
-          A changed verdict shows dependence on that publication. The recorded
+          A changed verdict shows dependence on that source record. The recorded
           investigation stays available for comparison and export.
         </p>
         <h2>Checking an imported run</h2>

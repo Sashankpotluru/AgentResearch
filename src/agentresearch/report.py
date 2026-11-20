@@ -5,9 +5,10 @@ import re
 import socket
 from urllib.parse import urlsplit
 
+from .data import pin_path
 from .engine import append_event, new_run, next_action
 from .retrieval import BM25Index
-from .schema import RunConfig, canonical_bytes, digest, integer, keys, string
+from .schema import RunConfig, canonical_bytes, digest, integer, keys, load_json, string
 from .tools import validate_output
 
 
@@ -138,6 +139,10 @@ def to_markdown(run, corpus):
         f"Run {_label(run['run_id'])}",
         "",
     ]
+    release = load_json(pin_path("cyber-report.json"))
+    is_attack = corpus.digest == release["corpus_digest"]
+    if is_attack:
+        lines.extend([release["source_note"], "", release["assessment_note"], ""])
     labels = {digest(row["span"]): f"E{i}" for i, row in enumerate(run["scores"], 1)}
     assessment = run["assessment"]
     if assessment is None:
@@ -179,7 +184,8 @@ def to_markdown(run, corpus):
         )
         url = _source_url(source.url)
         if url:
-            lines.extend([f"[Source record](<{url}>)", ""])
+            link_label = "Canonical reference" if is_attack else "Source record"
+            lines.extend([f"[{link_label}](<{url}>)", ""])
         lines.extend("> " + _md(line) for line in s["quote"].splitlines())
         lines.extend(
             [
@@ -202,4 +208,8 @@ def to_markdown(run, corpus):
             ),
         ]
     )
+    if is_attack:
+        lines.extend(
+            ["", "## MITRE ATT&CK® terms", "", release["license"].rstrip("\n")]
+        )
     return "\n".join(lines) + "\n"

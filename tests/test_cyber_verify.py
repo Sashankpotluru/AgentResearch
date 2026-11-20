@@ -119,3 +119,51 @@ def test_resealed_provenance_discrepancies(tmp_path, mutation, reason):
     write(release / "manifest.json", manifest)
     with pytest.raises(ValueError, match=reason):
         verify(release)
+
+
+def test_rebuilt_preparation_accepts_only_matching_decoded_content_and_metadata(
+    tmp_path,
+):
+    import gzip
+
+    from agentresearch.cyber_data import PREPARED_FILES
+    from agentresearch.cyber_verify import check_rebuilt_preparation
+    from agentresearch.data import file_digest
+
+    bundled = tmp_path / "release"
+    rebuilt = tmp_path / "rebuilt"
+    for root, mtime in ((bundled, 0), (rebuilt, 12345)):
+        root.mkdir()
+        for name in PREPARED_FILES:
+            payload = b'{"key":1}\n'
+            if name.endswith(".gz"):
+                payload = gzip.compress(payload, mtime=mtime)
+            (root / name).write_bytes(payload)
+        write(
+            root / "manifest.json",
+            {
+                "schema_version": 1,
+                "tram_input_rows": 12,
+                "files": {name: file_digest(root / name) for name in PREPARED_FILES},
+            },
+        )
+    release = read(bundled / "manifest.json")
+    manifest = read(rebuilt / "manifest.json")
+    assert manifest["files"]["corpus.json.gz"] != release["files"]["corpus.json.gz"]
+    check_rebuilt_preparation(rebuilt, bundled, release)
+
+    archive = rebuilt / "corpus.json.gz"
+    archive.write_bytes(gzip.compress(b'{"key":2}\n', mtime=12345))
+    with pytest.raises(ValueError, match="prepared hash differs"):
+        check_rebuilt_preparation(rebuilt, bundled, release)
+    manifest["files"][archive.name] = file_digest(archive)
+    write(rebuilt / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="prepared content differs"):
+        check_rebuilt_preparation(rebuilt, bundled, release)
+
+    archive.write_bytes((bundled / archive.name).read_bytes())
+    manifest["files"][archive.name] = file_digest(archive)
+    manifest["tram_input_rows"] += 1
+    write(rebuilt / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="prepared manifest metadata"):
+        check_rebuilt_preparation(rebuilt, bundled, release)

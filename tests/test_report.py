@@ -279,3 +279,40 @@ def test_large_local_trace_cli_round_trip_and_limits(tmp_path):
     assert limited.returncode == 2 and "size limit" in limited.stderr
     portable = cli("report", "--bundle")
     assert portable.returncode == 2 and "5 MiB" in portable.stderr
+
+
+def test_cli_markdown_carries_terms_only_for_the_verified_attack_corpus(
+    tmp_path, capsys
+):
+    from agentresearch.cli import main
+    from agentresearch.data import read_corpus
+    from agentresearch.experiment import read
+
+    repo = Path(__file__).resolve().parents[1]
+    license_text = (repo / "data/cyber-licenses/attack-license.txt").read_text()
+    release = read(repo / "site/assets/cyber-report.json")
+    corpus_path = repo / "results-cyber/corpus.jsonl"
+    corpus = read_corpus(corpus_path)
+    assert release["corpus_digest"] == corpus.digest
+    assert release["source_digests"] == sorted(s.source_digest for s in corpus.sources)
+    demo = read(repo / "site/data/claims/S0366-T1120.json")
+    run_path = tmp_path / "run.json"
+    run_path.write_text(json.dumps(demo["runs"]["challenge-4"]))
+    main(["report", str(run_path), str(corpus_path)])
+    report = capsys.readouterr().out
+    assert "quote MITRE ATT&CK® procedure summaries" in report
+    assert (
+        "[Canonical reference](<" in report
+        and "Vendor report text was never retrieved" in report
+    )
+    assert "refutation therefore requires independent factual verification" in report
+    assert license_text in report
+
+    generic, other = example()
+    other_path = tmp_path / "corpus.json"
+    other_path.write_text(json.dumps(other.to_dict()))
+    run_path.write_text(json.dumps(generic))
+    main(["report", str(run_path), str(other_path)])
+    report = capsys.readouterr().out
+    assert "## Evidence" in report and "source" in report
+    assert "MITRE" not in report and "Canonical reference" not in report

@@ -1,10 +1,10 @@
 # AgentResearch
 
-AgentResearch investigates claims about malware behavior using published threat intelligence. Open a saved case, read the exact MITRE ATT&CK® wording the model scored, and withdraw a cited publication to see whether the assessment changes. The browser starts with WannaCry and includes 23 other cases, including LockBit, BlackCat and Conti. [Open the case browser](https://sashankpotluru.github.io/AgentResearch/) · [Download the case index](site/data/index.json)
+AgentResearch investigates claims about malware behavior using published threat intelligence. Open a saved case, read the exact MITRE ATT&CK® wording the model scored, and withdraw a source record to see whether the assessment changes. The browser starts with WannaCry and includes 23 other cases, including LockBit, BlackCat and Conti. [Open the case browser](https://sashankpotluru.github.io/AgentResearch/) · [Download the case index](site/data/index.json)
 
 ## What the numbers show
 
-Finding a cited publication and interpreting its contents are different jobs. On **10,739 ATT&CK family–technique queries**, word BM25 recovered 97.625% of the labeled publications on average in its top five. Filtering by known malware-family membership raised mean Recall@5 to **99.208%**. The filter has access to catalogue metadata. Questions and answers both derive from ATT&CK relationships. [Protocol](experiments/cyber-protocol.json) · [Measured results](results-cyber/summary.json)
+On **10,739 ATT&CK family–technique queries**, word BM25 achieved **97.625% mean canonical source-record Recall@5**. Filtering by known malware-family membership raised it to **99.208%**. Each gold record groups MITRE summaries under a selected reference URL. Duplicate summaries pool references across relationships, so a gold URL can differ from the one cited by the queried relationship. The filter uses extra catalogue metadata. [Protocol](experiments/cyber-protocol.json) · [Measured results](results-cyber/summary.json)
 
 Matching report sentences to technique definitions was harder. On **4,036 unique TRAM sentences from 149 reports**, character TF-IDF led both word BM25 and reciprocal rank fusion (RRF). After reviewing the original results, we measured how much literal technique IDs in the input affected ranking. The diagnostic uses the same sentences, labels, candidate definitions and parameters. [Original rankings](results-cyber/tram-rankings.json.gz) · [Post-hoc diagnostic protocol](experiments/cyber-diagnostic-protocol.json) · [Masked rankings](results-cyber/tram-id-masked-rankings.json.gz)
 
@@ -18,8 +18,8 @@ Matching report sentences to technique definitions was harder. On **4,036 unique
 ## Inspect a case
 
 1. Select a family or search by technique ID. Choose a policy and a four- or eight-source budget to open its saved run.
-2. Read the scored excerpts and their locations. Each source groups MITRE procedure summaries by cited publication. The investigator scored the summaries, and the links identify their cited references.
-3. Withdraw a publication to remove all its scores. A change measures source dependence. Publications can share the same underlying observation. Restore the source to compare with the original assessment.
+2. Read the scored excerpts and their locations. Each source groups MITRE procedure summaries by canonical reference URL. The investigator scored MITRE’s wording. The links identify the selected references.
+3. Withdraw a source record to remove all its scores. A change measures source dependence. Publications can share the same underlying observation. Restore the source to compare with the original assessment.
 4. Expand **Run trace** to inspect the saved searches, reads and scores. Export the current view as portable JSON or Markdown. Import a portable bundle up to 5 MiB to replay it locally. [Investigation format](docs/format.md)
 
 ## Run it locally

@@ -1,17 +1,17 @@
 # Malware evidence evaluation
 
-The release measures publication retrieval, technique ranking and model decisions separately. The original protocol fixes the source revisions, deduplication, sampling, baseline parameters, policies, budgets and comparisons. A later protocol specifies the identifier diagnostic. [Original protocol](../experiments/cyber-protocol.json) · [Diagnostic protocol](../experiments/cyber-diagnostic-protocol.json) · [Machine-readable results](../results-cyber/summary.json)
+The release measures canonical source-record retrieval, technique ranking and model decisions separately. The original protocol fixes the source revisions, deduplication, sampling, baseline parameters, policies, budgets and comparisons. A later protocol specifies the identifier diagnostic. [Original protocol](../experiments/cyber-protocol.json) · [Diagnostic protocol](../experiments/cyber-diagnostic-protocol.json) · [Machine-readable results](../results-cyber/summary.json)
 
-## Finding the cited publication
+## ATT&CK canonical source-record Recall@5
 
-Each of 10,739 family–technique relationships supplies a query and a set of cited source IDs from the same ATT&CK catalogue. Rank all 1,120 source records with word BM25, or restrict candidates to the known family’s source memberships. Mean Recall@5 averages the fraction of each query’s gold sources recovered among its first five hits.
+Each of 10,739 family–technique pairs supplies a query. Its gold set contains the canonical source records assigned to its procedure summaries. Duplicate prose pools references across relationships, so a selected URL can differ from the queried relationship’s own citation. Mean canonical source-record Recall@5 averages the fraction of each query’s gold records in its first five hits. Global BM25 ranks all 1,120 records. Family-filtered BM25 restricts candidates using known family membership. [Gold-set construction](datasets.md)
 
 | Population | Queries | Global BM25 | Family-filtered BM25 |
 | --- | ---: | ---: | ---: |
 | All 747 families | 10,739 | 97.625% | 99.208% |
 | Description contains “ransom”, 77 families | 1,527 | 95.285% | 98.166% |
 
-The overall gain was 1.583 percentage points (95% paired family-bootstrap interval 1.188 to 2.002). The filter uses extra catalogue metadata. High overlap on constructed queries leaves independent factual QA performance unknown. [Publication rankings](../results-cyber/attack-rankings.json.gz)
+The overall gain was 1.583 percentage points (95% paired family-bootstrap interval 1.188 to 2.002). The filter uses extra catalogue metadata. High overlap on constructed queries leaves independent factual QA performance unknown. [Canonical source-record rankings](../results-cyber/attack-rankings.json.gz)
 
 ## Matching TRAM sentences to techniques
 

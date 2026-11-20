@@ -23,7 +23,7 @@ mcp = ["mcp==2.3.0", "mcp-types==2.3.0"]
 test = ["pytest==9.2.0"]
 
 [tool.setuptools.data-files]
-"share/agentresearch" = ["data/sources.json", "data/model-lock.json", "experiments/protocol.json", "data/cyber-sources.json", "experiments/cyber-protocol.json", "experiments/cyber-diagnostic-protocol.json"]
+"share/agentresearch" = ["data/sources.json", "data/model-lock.json", "experiments/protocol.json", "data/cyber-sources.json", "experiments/cyber-protocol.json", "experiments/cyber-diagnostic-protocol.json", "site/assets/cyber-report.json"]
 
 [project.scripts]
 agentresearch = "agentresearch.cli:main"

@@ -4,7 +4,7 @@ AgentResearch's original software uses the MIT license. The following material r
 
 ## MITRE ATT&CK®
 
-© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation. AgentResearch cleans ATT&CK markup, groups procedure summaries by cited publication, derives family–technique queries and preserves reference links. These excerpts reproduce MITRE’s descriptions. The cited publications retain their respective ownership. [Pinned ATT&CK source](https://github.com/mitre-attack/attack-stix-data/tree/a8db2f52eb933c9c99060c123e088b3326d3a607) · [Full license and disclaimer](data/cyber-licenses/attack-license.txt)
+© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation. AgentResearch cleans ATT&CK markup, groups procedure summaries by canonical reference URL, derives family–technique queries and preserves reference links. These excerpts reproduce MITRE’s descriptions. The cited publications retain their respective ownership. [Pinned ATT&CK source](https://github.com/mitre-attack/attack-stix-data/tree/a8db2f52eb933c9c99060c123e088b3326d3a607) · [Full license and disclaimer](data/cyber-licenses/attack-license.txt)
 
 ## TRAM
 

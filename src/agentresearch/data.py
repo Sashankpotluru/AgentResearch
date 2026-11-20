@@ -40,6 +40,8 @@ def pin_path(name):
         in {"protocol.json", "cyber-protocol.json", "cyber-diagnostic-protocol.json"}
         else "data"
     )
+    if name == "cyber-report.json":
+        repo_directory = "site/assets"
     checkout = module.parents[2] / repo_directory / name
     if module.parents[1].name == "src" and checkout.is_file():
         return checkout

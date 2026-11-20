@@ -13,7 +13,7 @@ python scripts/cyber.py verify --results results-cyber --site-dir site/data
 
 ## Rebuild the inputs or repeat inference
 
-The following commands use fresh output paths under `.artifacts/reproduction`. The downloader checks pinned input sizes and SHA-256. Strict verification derives the prepared corpus from these original downloads before replaying the published outputs.
+The following commands use fresh output paths under `.artifacts/reproduction`. The downloader checks pinned input sizes and SHA-256. Strict verification derives the prepared corpus from these original downloads and compares its decoded file contents and preparation metadata with the released inputs. The published archives also undergo byte-for-byte checksum verification.
 
 ```sh
 python scripts/cyber.py prepare --download \

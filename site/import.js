@@ -1,3 +1,4 @@
+import cyberReport from "./assets/cyber-report.json?v=cyber-v2" with { type: "json" };
 import {
   canonical,
   compareText,
@@ -431,6 +432,15 @@ const label = (value) =>
 export async function markdown(bundle) {
   const { run, sources, view } = bundle,
     excluded = new Set(view.excluded_source_ids);
+  // A portable bundle contains only a subset of the corpus. Its declared
+  // corpus digest alone cannot establish who wrote the supplied excerpts.
+  const records = Object.values(sources);
+  const isAttack =
+    run.corpus_digest === cyberReport.corpus_digest &&
+    records.length > 0 &&
+    (await Promise.all(records.map(digest))).every((hash) =>
+      cyberReport.source_digests.includes(hash),
+    );
   const current = await viewAssessment(run, excluded);
   const complete = run.status === "complete";
   const lines = [
@@ -438,6 +448,9 @@ export async function markdown(bundle) {
     "",
     label(run.claim),
     "",
+    ...(isAttack
+      ? [cyberReport.source_note, "", cyberReport.assessment_note, ""]
+      : []),
     complete
       ? "Original verdict: **" + run.assessment.final.verdict + "**"
       : "Recorded status: **" + run.status + "**",
@@ -485,8 +498,10 @@ export async function markdown(bundle) {
         ").",
       "",
     );
-    if (url)
-      lines.push("[Source record](<" + url.replaceAll("&", "&amp;") + ">)", "");
+    if (url) {
+      const linkLabel = isAttack ? "Canonical reference" : "Source record";
+      lines.push(`[${linkLabel}](<${url.replaceAll("&", "&amp;")}>)`, "");
+    }
     lines.push(
       ...s.quote
         .split(/\r\n|[\n\r\u2028\u2029]/u)
@@ -505,5 +520,7 @@ export async function markdown(bundle) {
   lines.push(
     "The automated model scored these excerpts from the supplied corpus. Scores are uncalibrated. Source withdrawal reuses the recorded scores. Annotations and retrieval can miss relevant evidence.",
   );
+  if (isAttack)
+    lines.push("", "## MITRE ATT&CK® terms", "", cyberReport.license.trimEnd());
   return lines.join("\n") + "\n";
 }

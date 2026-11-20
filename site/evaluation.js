@@ -91,9 +91,9 @@ export function renderEvaluation(summary, box, agentBox, cohort, budget) {
   const { attack, tram, tram_id_masked: masked } = summary.retrieval;
   box.replaceChildren(
     retrieval(
-      "ATT&CK publication retrieval",
+      "ATT&CK canonical source-record Recall@5",
       attack,
-      "Rank cited publications for 10,739 family–technique queries across 747 families. The family filter uses known publication membership. The 1,527-query slice matches “ransom” in family descriptions. These queries and answers derive from the same catalogue.",
+      "Rank canonical source records for 10,739 family–technique queries across 747 families. Duplicate summaries pool references, so the selected URL can differ from a relationship’s own citation. The family filter uses known source-record membership. The 1,527-query slice matches “ransom” in family descriptions. These queries and answers derive from the same catalogue.",
     ),
     retrieval(
       "TRAM technique ranking",

@@ -1,5 +1,7 @@
 """Independent validation of CTI inventory, rankings, sample membership and saved traces."""
 
+import gzip
+import hashlib
 import math
 import re
 from collections import Counter, defaultdict
@@ -18,6 +20,8 @@ from .cyber_data import (
     protocol,
     sha,
 )
+from .cyber_experiment import corpus_catalog, counts
+from .cyber_retrieval import attack_rankings, tram_rankings
 from .data import file_digest, pin_path, read_corpus
 from .experiment import checkpoint_id, make_index, read
 from .report import validate_run
@@ -242,6 +246,39 @@ def check_catalog(cat, p):
     return len(seen_rels)
 
 
+def check_rebuilt_preparation(prepared, bundled, released_manifest):
+    """Check the rebuild's own checksums, then compare its payloads with the release."""
+    files = {
+        f.relative_to(prepared).as_posix() for f in prepared.rglob("*") if f.is_file()
+    }
+    require(
+        files == {*PREPARED_FILES, "manifest.json"},
+        "unexpected prepared file inventory",
+    )
+    manifest = read(prepared / "manifest.json")
+    compare(
+        {k: v for k, v in manifest.items() if k != "files"},
+        {k: v for k, v in released_manifest.items() if k != "files"},
+        "prepared manifest metadata",
+    )
+    require(set(manifest["files"]) == set(PREPARED_FILES), "prepared inventory differs")
+    for name in PREPARED_FILES:
+        actual = file_digest(prepared / name)
+        require(actual == manifest["files"][name], "prepared hash differs: " + name)
+        if actual == released_manifest["files"][name]:
+            continue
+        require(name.endswith(".gz"), "prepared content differs: " + name)
+        with (
+            gzip.open(prepared / name, "rb") as rebuilt,
+            gzip.open(bundled / name, "rb") as released,
+        ):
+            require(
+                hashlib.file_digest(rebuilt, "sha256").digest()
+                == hashlib.file_digest(released, "sha256").digest(),
+                "prepared content differs: " + name,
+            )
+
+
 def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
     out = Path(out)
     if strict_intake is not None:
@@ -329,63 +366,36 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
         check_catalog(cat, p) == summary["counts"]["relationships"],
         "relationship count differs",
     )
-    prepared = Path(prepared) if prepared is not None else out / "prepared"
-    strict = True
-    if strict:
+    bundled = out / "prepared"
+    compare(read(bundled / "manifest.json"), nested, "bundled preparation manifest")
+    require(
+        all(actual["prepared/" + name] == sig for name, sig in nested["files"].items()),
+        "bundled preparation differs",
+    )
+    if prepared is not None:
         prepared = Path(prepared)
-        require(
-            {
-                f.relative_to(prepared).as_posix()
-                for f in prepared.rglob("*")
-                if f.is_file()
-            }
-            == {*PREPARED_FILES, "manifest.json"},
-            "unexpected prepared file inventory",
-        )
-        require(
-            m["prepared"] == read(prepared / "manifest.json"),
-            "prepared manifest differs",
-        )
-        require(
-            all(
-                file_digest(prepared / name) == sig
-                for name, sig in m["prepared"]["files"].items()
-            ),
-            "prepared hash differs",
-        )
-        corpus = Corpus.from_dict(read(prepared / "corpus.json.gz"))
-        require(
-            corpus.digest == summary["corpus_digest"], "prepared corpus digest differs"
-        )
-        require(
-            read_corpus(out / "corpus.jsonl").digest == corpus.digest,
-            "CLI corpus differs from evaluated corpus",
-        )
-        require(
-            read(out / "prepared" / "manifest.json") == m["prepared"],
-            "bundled preparation manifest differs",
-        )
-        require(
-            all(
-                file_digest(out / "prepared" / name) == sig
-                for name, sig in m["prepared"]["files"].items()
-            ),
-            "bundled preparation differs",
-        )
-        index = make_index(corpus)
-        from .cyber_experiment import corpus_catalog, counts
+        check_rebuilt_preparation(prepared, bundled, nested)
+    else:
+        prepared = bundled
+    corpus = Corpus.from_dict(read(prepared / "corpus.json.gz"))
+    require(corpus.digest == summary["corpus_digest"], "prepared corpus digest differs")
+    require(
+        read_corpus(out / "corpus.jsonl").digest == corpus.digest,
+        "CLI corpus differs from evaluated corpus",
+    )
+    index = make_index(corpus)
 
-        original = read(prepared / "catalog.json.gz")
-        items = read(prepared / "tram.json.gz")
-        require(
-            corpus_catalog(corpus, original, items) == cat,
-            "public provenance differs from original corpus",
-        )
-        compare(
-            summary["counts"],
-            counts(corpus, original, items, m["prepared"]["tram_input_rows"]),
-            "counts",
-        )
+    original = read(prepared / "catalog.json.gz")
+    items = read(prepared / "tram.json.gz")
+    require(
+        corpus_catalog(corpus, original, items) == cat,
+        "public provenance differs from original corpus",
+    )
+    compare(
+        summary["counts"],
+        counts(corpus, original, items, m["prepared"]["tram_input_rows"]),
+        "counts",
+    )
     for name, dataset, filename, queries, cluster, candidates, comparison in (
         (
             "attack",
@@ -427,29 +437,24 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
             ranking_statistics(rows, p[dataset + "_methods"], comparison, p),
             name,
         )
-        if strict:
-            from .cyber_retrieval import attack_rankings, tram_rankings
-
-            if dataset == "attack":
-                replay = attack_rankings(corpus, original)
-            else:
-                replay_items = items
-                if name == "tram_id_masked":
-                    rule = diagnostic["query_transform"]
-                    pattern = re.compile(rule["pattern"])
-                    replay_items = [
-                        {
-                            **item,
-                            "sentence": " ".join(
-                                pattern.sub(
-                                    rule["replacement"], item["sentence"]
-                                ).split()
-                            ),
-                        }
-                        for item in items
-                    ]
-                replay = tram_rankings(original["techniques"], replay_items)
-            require(rows == replay, "lexical ranking replay differs")
+        if dataset == "attack":
+            replay = attack_rankings(corpus, original)
+        else:
+            replay_items = items
+            if name == "tram_id_masked":
+                rule = diagnostic["query_transform"]
+                pattern = re.compile(rule["pattern"])
+                replay_items = [
+                    {
+                        **item,
+                        "sentence": " ".join(
+                            pattern.sub(rule["replacement"], item["sentence"]).split()
+                        ),
+                    }
+                    for item in items
+                ]
+            replay = tram_rankings(original["techniques"], replay_items)
+        require(rows == replay, "lexical ranking replay differs")
     grouped = {}
     for qid in sorted(qids):
         trace = read(out / f"traces/{qid}.json.gz")
@@ -489,8 +494,7 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
                 },
                 "trace binding differs",
             )
-            if strict:
-                validate_run(run, corpus, index=index)
+            validate_run(run, corpus, index=index)
         grouped[qid] = runs
     for name, members in selected.items():
         compare(
@@ -502,7 +506,7 @@ def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
         verify_demo(Path(site_dir), m, summary, selected, original, corpus, grouped, p)
     return {
         "verified": True,
-        "original_corpus_replay": strict,
+        "original_corpus_replay": True,
         "unique_runs": len(qids) * len(p["agent_policies"]) * len(p["agent_budgets"]),
         "benchmark_cases": len(selected["benchmark"]),
         "demo_cases": len(selected["demo"]),

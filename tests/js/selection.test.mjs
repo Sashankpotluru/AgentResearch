@@ -403,7 +403,7 @@ test("evaluation navigation exposes distinct original and masked results plus po
   assert.deepEqual(
     results.querySelectorAll("h2").map((n) => n.textContent),
     [
-      "ATT&CK publication retrieval",
+      "ATT&CK canonical source-record Recall@5",
       "TRAM technique ranking",
       "TRAM with literal technique IDs masked",
     ],
@@ -453,4 +453,44 @@ test("source withdrawal, reset and policy selection update the exported view and
   assert.equal(bundle.run.config.policy, "first_hit");
   await d.get("save-md").click();
   assert.match(await d.downloads.at(-1).text(), /WannaCry/);
+});
+
+test("Markdown export attributes verified ATT&CK records and keeps unrelated imports generic", async (t) => {
+  const d = await desk(t);
+  const license = readFileSync(new URL("assets/licenses/attack-license.txt", site), "utf8");
+  async function exportMarkdown() {
+    await d.get("save-md").click();
+    return d.downloads.at(-1).text();
+  }
+  async function importBundle(bundle) {
+    const file = d.get("import-file");
+    const bytes = new TextEncoder().encode(JSON.stringify(bundle));
+    file.files = [{ size: bytes.length, arrayBuffer: async () => bytes.buffer }];
+    await file.fire("change");
+    assert.match(d.get("status").textContent, /Imported run checked/);
+  }
+  const first = await exportMarkdown();
+  assert.match(first, /quote MITRE ATT&CK® procedure summaries/);
+  assert.match(first, /Vendor report text was never retrieved/);
+  assert.match(first, /\[Canonical reference\]\(</);
+  assert.match(first, /refutation therefore requires independent factual verification/);
+  assert.ok(first.includes(license));
+
+  await d.get("save-json").click();
+  const cyber = JSON.parse(await d.downloads.at(-1).text());
+  await importBundle(cyber);
+  assert.equal(await exportMarkdown(), first);
+
+  const legacy = new URL("../archive/scifact-demo/", site);
+  const { claims } = JSON.parse(readFileSync(new URL("index.json", legacy)));
+  const sample = JSON.parse(readFileSync(new URL(claims[0].path, legacy)));
+  const { bundleFor } = await import("../../site/import.js");
+  const other = bundleFor(sample.runs["challenge-4"], sample.sources, []);
+  for (const corpusDigest of [other.run.corpus_digest, cyber.run.corpus_digest]) {
+    other.run.corpus_digest = corpusDigest;
+    await importBundle(other);
+    const report = await exportMarkdown();
+    assert.match(report, /## Recorded evidence/);
+    assert.doesNotMatch(report, /MITRE|Canonical reference/);
+  }
 });

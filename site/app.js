@@ -1,4 +1,4 @@
-import { renderEvaluation } from "./evaluation.js?v=cyber-v1";
+import { renderEvaluation } from "./evaluation.js?v=cyber-v2";
 import { digest, viewAssessment } from "./decision.js";
 import {
   bundleFor,
@@ -7,7 +7,7 @@ import {
   parseBundle,
   safeUrl,
   validateImport,
-} from "./import.js";
+} from "./import.js?v=cyber-v2";
 
 const $ = (id) => document.getElementById(id);
 const verdicts = {
@@ -361,7 +361,7 @@ function drawSources(current) {
     " scored " +
     (groups.size === 1 ? "source" : "sources") +
     (record
-      ? ". Excerpts quote MITRE procedure summaries attributed to the publications below."
+      ? ". Excerpts quote MITRE procedure summaries grouped by canonical reference URL."
       : ". Excerpts quote the supplied source texts.");
   const ordered = [...groups.values()].sort(
     (a, b) =>
@@ -406,7 +406,7 @@ function drawSources(current) {
     const refs = el("div", undefined, "source-links");
     if (safeUrl(src.url))
       refs.append(
-        link(record ? "Open cited reference ↗" : "Source link ↗", src.url),
+        link(record ? "Open canonical reference ↗" : "Source link ↗", src.url),
       );
     refs.append(details("Full source text", el("p", src.text, "context-text")));
     shelf.append(refs);
