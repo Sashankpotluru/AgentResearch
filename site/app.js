@@ -556,6 +556,40 @@ async function activate(candidate, claimRecord, token) {
   setAvailable(true);
   note(record ? "" : "Imported run checked against its supplied sources.");
 }
+const caseTextFields = [
+  "query_id",
+  "claim",
+  "family",
+  "family_id",
+  "technique",
+  "technique_id",
+];
+function hasCaseIdentity(row) {
+  return (
+    row &&
+    caseTextFields.every(
+      (field) => typeof row[field] === "string" && row[field].trim().length > 0,
+    ) &&
+    typeof row.ransomware_related === "boolean"
+  );
+}
+function validateCaseRecord(next, item) {
+  if (
+    !hasCaseIdentity(next) ||
+    caseTextFields.some((field) => next[field] !== item[field]) ||
+    next.ransomware_related !== item.ransomware_related ||
+    next.schema_version !== 1 ||
+    typeof next.description !== "string" ||
+    next.source_note !== index.source_note ||
+    next.family_url !==
+      "https://attack.mitre.org/software/" + item.family_id + "/" ||
+    next.technique_url !==
+      "https://attack.mitre.org/techniques/" +
+        item.technique_id.replace(".", "/") +
+        "/"
+  )
+    throw new Error("Case metadata differs from the release.");
+}
 async function loadClaim(focusId = null) {
   const item = index?.claims.find((c) => c.query_id === desiredCase);
   if (!item) return;
@@ -568,6 +602,7 @@ async function loadClaim(focusId = null) {
         ? record
         : await getJSON("data/" + item.path);
     if (token !== request) return;
+    validateCaseRecord(next, item);
     const run = next.runs[policy + "-" + budget];
     if (
       run.corpus_digest !== index.corpus_digest ||
@@ -575,10 +610,7 @@ async function loadClaim(focusId = null) {
       run.config.threshold !== index.threshold ||
       run.config.policy !== policy ||
       String(run.config.budget) !== budget ||
-      run.claim !== item.claim ||
-      next.family !== item.family ||
-      next.technique_id !== item.technique_id ||
-      next.query_id !== item.query_id
+      run.claim !== item.claim
     )
       throw new Error("Claim or release identity mismatch.");
     await activate(bundleFor(run, next.sources, []), next, token);
@@ -678,7 +710,20 @@ $("cohort").addEventListener("change", showResults);
 $("result-budget").addEventListener("change", showResults);
 async function start() {
   try {
-    index = await getJSON("data/index.json");
+    const candidate = await getJSON("data/index.json");
+    if (
+      !Array.isArray(candidate.claims) ||
+      !candidate.claims.length ||
+      typeof candidate.source_note !== "string" ||
+      !candidate.claims.every(
+        (item) =>
+          hasCaseIdentity(item) &&
+          item.path === "claims/" + item.query_id + ".json",
+      )
+    ) {
+      throw new Error("Invalid case index metadata.");
+    }
+    index = candidate;
     refreshCases();
     if (!bundle && !request) {
       desiredCase = (

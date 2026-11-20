@@ -17,7 +17,7 @@ agentresearch audit .artifacts/run.json results-cyber/corpus.jsonl
 agentresearch report .artifacts/run.json results-cyber/corpus.jsonl > .artifacts/report.md
 ```
 
-The example uses an published threshold of 0.90, expressed in integer millionths, and pauses after one tool attempt. Omit `--max-steps` to run to completion. Both the corpus and model identities must match on resume. Given a portable run and its corpus, audit and report work offline without the optional neural dependencies. A successful audit replays tool selection, quotes and decisions from recorded scores. The report attributes those scores to the automated verifier. [Investigation format](format.md)
+The example uses the published threshold of 0.90, expressed in integer millionths, and pauses after one tool attempt. Omit `--max-steps` to run to completion. Both the corpus and model identities must match on resume. Given a portable run and its corpus, audit and report work offline without the optional neural dependencies. A successful audit replays tool selection, quotes and decisions from recorded scores. The report attributes those scores to the automated verifier. [Investigation format](format.md)
 
 ## Optional science connector for PubMed abstracts
 

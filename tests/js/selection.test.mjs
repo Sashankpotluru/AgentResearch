@@ -74,7 +74,7 @@ async function until(condition) {
   }
 }
 
-async function desk(t) {
+async function desk(t, changeFetchedCase) {
   const nodes = new Map(),
     downloads = [];
   function get(id) {
@@ -123,7 +123,11 @@ async function desk(t) {
 
       return {
         ok: true,
-        json: async () => JSON.parse(readFileSync(new URL(path, site))),
+        json: async () => {
+          const data = JSON.parse(readFileSync(new URL(path, site)));
+          if (path === "data/" + next.path) changeFetchedCase?.(data);
+          return data;
+        },
       };
     },
   };
@@ -188,6 +192,57 @@ test("delayed claim selection blocks old exports and exposes only the newly load
   assert.equal(d.get("case-context").children.at(-1).textContent, next.claim);
   assert.equal(await d.exportedClaim(), next.claim);
 });
+
+for (const [label, change] of [
+  ["missing description", (record) => delete record.description],
+  ["null description", (record) => (record.description = null)],
+  ["wrong family ID", (record) => (record.family_id = original.family_id)],
+  ["wrong technique name", (record) => (record.technique = original.technique)],
+  ["missing technique URL", (record) => delete record.technique_url],
+  [
+    "invalid family URL",
+    (record) => (record.family_url = "javascript:alert(1)"),
+  ],
+  ["mismatched case claim", (record) => (record.claim = original.claim)],
+]) {
+  test(
+    "malformed fetched case preserves prior UI and export: " + label,
+    async (t) => {
+      const d = await desk(t, change);
+      const source = d.get("source-list").querySelectorAll("button")[0];
+      source.click();
+      await until(() => !d.get("reset").disabled);
+      const done = d.switchClaim();
+      assert.equal(d.get("save-json").disabled, true);
+      d.release();
+      await done;
+      assert.match(
+        d.get("status").textContent,
+        /Could not open this recorded run/,
+      );
+      assert.equal(activeCase(d), original.query_id);
+      assert.equal(d.get("case-title").textContent, original.family);
+      assert.equal(
+        d.get("case-context").children.at(-1).textContent,
+        original.claim,
+      );
+      assert.equal(d.get("workspace").hidden, false);
+      const toggle = d
+        .get("source-list")
+        .querySelectorAll("button")
+        .find((n) => n.dataset.source === source.dataset.source);
+      assert.equal(toggle.textContent, "Restore");
+      await d.get("save-json").click();
+      const bundle = JSON.parse(await d.downloads.at(-1).text());
+      assert.equal(bundle.run.claim, original.claim);
+      assert.deepEqual(bundle.view.excluded_source_ids, [
+        source.dataset.source,
+      ]);
+      assert.equal(d.get("policy").value, bundle.run.config.policy);
+      assert.equal(d.get("budget").value, String(bundle.run.config.budget));
+    },
+  );
+}
 
 test("failed import during a claim fetch restores one coherent selectable and exportable run", async (t) => {
   const d = await desk(t),
