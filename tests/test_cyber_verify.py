@@ -1,21 +1,17 @@
 import pytest
 from test_report import example
 
-from agentresearch.cyber_experiment import encode_trace
-from agentresearch.cyber_verify import restore, verify
+from agentresearch.cyber_verify import verify
 from agentresearch.experiment import read, write
 from agentresearch.report import validate_run
 
 
-def test_trace_roundtrip_and_tampering():
+def test_canonical_trace_keeps_exact_quotes_and_rejects_tampering():
     run, corpus = example()
-    compact = encode_trace(run)
-    assert "quote" not in compact["scores"][0]["span"]
-    assert restore(compact, corpus) == run
-    validate_run(restore(compact, corpus), corpus)
-    compact["events"][0]["hash"] = "0" * 64
-    with pytest.raises(ValueError, match="chain"):
-        validate_run(restore(compact, corpus), corpus)
+    validate_run(run, corpus)
+    run["scores"][0]["span"]["quote"] += " altered"
+    with pytest.raises(ValueError):
+        validate_run(run, corpus)
 
 
 @pytest.mark.parametrize(

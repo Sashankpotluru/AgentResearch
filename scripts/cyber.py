@@ -37,11 +37,25 @@ def main():
     exp.add_argument("--results", type=Path, default=Path("results-cyber"))
     exp.add_argument("--device", choices=("cpu", "cuda", "mps"), default="cpu")
     exp.add_argument("--batch-size", type=int, default=8)
+    exp.add_argument("--site-dir", type=Path, default=Path(".artifacts/cyber-demo"))
+    package = commands.add_parser(
+        "package",
+        help="Export existing measured traces and browser bundles without rescoring",
+    )
+    package.add_argument(
+        "--prepared", type=Path, default=Path(".artifacts/cyber-prepared")
+    )
+    package.add_argument("--work", type=Path, default=Path(".artifacts/cyber-runs"))
+    package.add_argument("--results", type=Path, default=Path("results-cyber"))
+    package.add_argument("--site-dir", type=Path, default=Path(".artifacts/cyber-demo"))
     ver = commands.add_parser(
         "verify",
         help="Verify inventory, sample assignment and independently recomputed metrics",
     )
     ver.add_argument("--results", type=Path, default=Path("results-cyber"))
+    ver.add_argument(
+        "--site-dir", type=Path, help="Verify browser payloads against recorded runs"
+    )
     inputs = ver.add_mutually_exclusive_group()
     inputs.add_argument(
         "--prepared",
@@ -65,9 +79,19 @@ def main():
             args.model,
             args.device,
             args.batch_size,
+            site_dir=args.site_dir,
         )
+    elif args.command == "package":
+        from agentresearch.cyber_publication import publish
+
+        response = publish(args.prepared, args.work, args.results, args.site_dir)
     else:
-        response = verify(args.results, args.prepared, strict_intake=args.strict_intake)
+        response = verify(
+            args.results,
+            args.prepared,
+            strict_intake=args.strict_intake,
+            site_dir=args.site_dir,
+        )
     print(json.dumps(response, indent=2, sort_keys=True))
 
 

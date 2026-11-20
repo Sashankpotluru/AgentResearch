@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from .cyber_data import prepare, protocol, sha
-from .data import file_digest, pin_path
+from .data import file_digest, pin_path, read_corpus
 from .experiment import checkpoint_id, make_index, read
 from .report import validate_run
 from .schema import VERDICTS, Corpus, digest
@@ -132,19 +132,6 @@ def check_rankings(rows, expected, candidates, methods):
             )
 
 
-def restore(obj, corpus):
-    if isinstance(obj, list):
-        return [restore(v, corpus) for v in obj]
-    if not isinstance(obj, dict):
-        return obj
-    value = {k: restore(v, corpus) for k, v in obj.items()}
-    if set(obj) == {"source_id", "sentence_id", "start", "end", "source_digest"}:
-        value["quote"] = corpus.by_id[obj["source_id"]].text[obj["start"] : obj["end"]]
-    if set(obj) == {"source_id", "score"}:
-        value["snippet"] = corpus.by_id[obj["source_id"]].text[:180]
-    return value
-
-
 def agent_statistics(runs):
     results = {}
     for key in runs[0]:
@@ -245,12 +232,12 @@ def check_catalog(cat, p):
     return len(seen_rels)
 
 
-def verify(out, prepared=None, *, strict_intake=None):
+def verify(out, prepared=None, *, strict_intake=None, site_dir=None):
     out = Path(out)
     if strict_intake is not None:
         with TemporaryDirectory() as tmp:
             prepare(strict_intake, tmp)
-            return verify(out, Path(tmp))
+            return verify(out, Path(tmp), site_dir=site_dir)
     m = read(out / "manifest.json")
     for name, key in (
         ("cyber-protocol.json", "protocol_sha256"),
@@ -296,14 +283,17 @@ def verify(out, prepared=None, *, strict_intake=None):
             "tram-rankings.json.gz",
             "selection.json",
         }
-        | {f"traces/{qid}.json.gz" for qid in qids},
+        | {f"traces/{qid}.json.gz" for qid in qids}
+        | {"corpus.jsonl", "prepared/manifest.json"}
+        | {f"prepared/{name}" for name in m["prepared"]["files"]},
         "unexpected release files",
     )
     require(
         check_catalog(cat, p) == summary["counts"]["relationships"],
         "relationship count differs",
     )
-    strict = prepared is not None
+    prepared = Path(prepared) if prepared is not None else out / "prepared"
+    strict = True
     if strict:
         prepared = Path(prepared)
         require(
@@ -320,6 +310,21 @@ def verify(out, prepared=None, *, strict_intake=None):
         corpus = Corpus.from_dict(read(prepared / "corpus.json.gz"))
         require(
             corpus.digest == summary["corpus_digest"], "prepared corpus digest differs"
+        )
+        require(
+            read_corpus(out / "corpus.jsonl").digest == corpus.digest,
+            "CLI corpus differs from evaluated corpus",
+        )
+        require(
+            read(out / "prepared" / "manifest.json") == m["prepared"],
+            "bundled preparation manifest differs",
+        )
+        require(
+            all(
+                file_digest(out / "prepared" / name) == sig
+                for name, sig in m["prepared"]["files"].items()
+            ),
+            "bundled preparation differs",
         )
         index = make_index(corpus)
         from .cyber_experiment import corpus_catalog, counts
@@ -364,8 +369,7 @@ def verify(out, prepared=None, *, strict_intake=None):
     for qid in sorted(qids):
         trace = read(out / f"traces/{qid}.json.gz")
         require(
-            trace["query_id"] == qid
-            and trace["encoding"] == "pinned-corpus-offsets-v1",
+            trace["query_id"] == qid and trace["encoding"] == "canonical-runs-v1",
             "trace identity differs",
         )
         runs = trace["runs"]
@@ -401,7 +405,7 @@ def verify(out, prepared=None, *, strict_intake=None):
                 "trace binding differs",
             )
             if strict:
-                validate_run(restore(run, corpus), corpus, index=index)
+                validate_run(run, corpus, index=index)
         grouped[qid] = runs
     for name, members in selected.items():
         compare(
@@ -409,10 +413,92 @@ def verify(out, prepared=None, *, strict_intake=None):
             agent_statistics([grouped[q] for q in members]),
             name,
         )
+    if site_dir is not None:
+        verify_demo(Path(site_dir), m, summary, selected, original, corpus, grouped, p)
     return {
         "verified": True,
         "original_corpus_replay": strict,
         "unique_runs": len(qids) * len(p["agent_policies"]) * len(p["agent_budgets"]),
         "benchmark_cases": len(selected["benchmark"]),
         "demo_cases": len(selected["demo"]),
+        "browser_payloads_verified": site_dir is not None,
     }
+
+
+def verify_demo(site, manifest, summary, selected, catalog, corpus, grouped, p):
+    """Cross-bind browser data to the complete public research release."""
+    actual = {
+        f.relative_to(site).as_posix(): file_digest(f)
+        for f in site.rglob("*")
+        if f.is_file()
+    }
+    expected_files = {"index.json", "summary.json"} | {
+        f"claims/{qid}.json" for qid in selected["demo"]
+    }
+    require(
+        set(actual) == expected_files and actual == manifest["site_files"],
+        "browser inventory or checksum differs",
+    )
+    compare(read(site / "summary.json"), summary, "browser summary")
+    index = read(site / "index.json")
+    require(
+        index["schema_version"] == 1
+        and index["corpus_digest"] == corpus.digest
+        and index["model_digest"] == summary["model_digest"]
+        and index["threshold"] == p["agent_threshold"]
+        and index["policies"] == p["agent_policies"]
+        and index["budgets"] == p["agent_budgets"],
+        "browser experiment differs",
+    )
+    require(
+        [row["query_id"] for row in index["claims"]] == selected["demo"],
+        "browser sample differs",
+    )
+    queries = {q["query_id"]: q for q in catalog["queries"]}
+    for row in index["claims"]:
+        qid = row["query_id"]
+        query = queries[qid]
+        relative = f"claims/{qid}.json"
+        require(row["path"] == relative, "browser path differs")
+        record = read(site / relative)
+        require(record["schema_version"] == 1, "browser schema differs")
+        for key in (
+            "query_id",
+            "claim",
+            "family",
+            "family_id",
+            "technique",
+            "technique_id",
+            "ransomware_related",
+        ):
+            require(
+                record[key] == query[key] and row[key] == query[key],
+                "browser case metadata differs",
+            )
+        require(
+            record["description"]
+            == catalog["families"][query["family_id"]]["description"],
+            "browser family description differs",
+        )
+        require(
+            record["family_url"]
+            == f"https://attack.mitre.org/software/{query['family_id']}/"
+            and record["technique_url"]
+            == "https://attack.mitre.org/techniques/"
+            + query["technique_id"].replace(".", "/")
+            + "/",
+            "browser reference differs",
+        )
+        compare(record["runs"], grouped[qid], "browser trace")
+        ids = {
+            hit["source_id"]
+            for run in grouped[qid].values()
+            for event in run["events"]
+            if event["tool"] == "search" and event["error"] is None
+            for hit in event["output"]
+        }
+        compare(
+            record["sources"],
+            {sid: corpus.by_id[sid].to_dict() for sid in ids},
+            "browser sources",
+        )

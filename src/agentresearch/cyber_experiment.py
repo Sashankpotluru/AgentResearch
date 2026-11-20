@@ -141,17 +141,6 @@ def corpus_catalog(corpus, catalog, items):
     }
 
 
-def encode_trace(obj):
-    """Lossless against pinned inputs. Retain offsets, scores and original event hashes."""
-    if isinstance(obj, list):
-        return [encode_trace(v) for v in obj]
-    if isinstance(obj, dict):
-        return {
-            k: encode_trace(v) for k, v in obj.items() if k not in {"quote", "snippet"}
-        }
-    return obj
-
-
 def counts(corpus, catalog, items, raw_rows):
     import re
 
@@ -182,7 +171,7 @@ def counts(corpus, catalog, items, raw_rows):
     }
 
 
-def evaluate(prepared, work, out, model, device, batch_size):
+def evaluate(prepared, work, out, model, device, batch_size, site_dir=None):
     from .cyber_retrieval import attack_rankings, retrieval_summary, tram_rankings
     from .schema import digest
 
@@ -215,7 +204,6 @@ def evaluate(prepared, work, out, model, device, batch_size):
         + [
             "Some original TRAM sentences mention ATT&CK IDs and include report extraction artifacts.",
             "Family-filtered BM25 uses public malware-to-source membership unavailable to the global comparator.",
-            "Trace strings are represented by references to the pinned corpus and Unicode offsets.",
         ],
     }
 
@@ -233,7 +221,7 @@ def evaluate(prepared, work, out, model, device, batch_size):
         group = read(work / "traces" / f"{qid}.json.gz")
         write(
             out / "traces" / f"{qid}.json.gz",
-            {"encoding": "pinned-corpus-offsets-v1", **encode_trace(group)},
+            {"encoding": "canonical-runs-v1", **group},
         )
     write(out / "summary.json", summary)
     files = [
@@ -261,4 +249,7 @@ def evaluate(prepared, work, out, model, device, batch_size):
         "files": {str(f.relative_to(out)): file_digest(f) for f in sorted(files)},
     }
     write(out / "manifest.json", release)
+    from .cyber_publication import publish
+
+    publish(prepared, work, out, site_dir or work / "demo")
     return summary
